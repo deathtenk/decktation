@@ -7,6 +7,16 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-08-01
+
+### Fixed
+
+- Fixed fresh installations detecting the configured push-to-talk buttons but
+  not starting a recording after **Enable Dictation** was switched on.
+- Fixed game preset selections reverting to World of Warcraft after the plugin
+  panel was reopened.
+- Fixed confirm-mode and manual-send settings not reaching the backend.
+
 ## [0.3.7] - 2026-07-20
 
 ### Changed
@@ -145,7 +155,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - Initial packaged release of Decktation for Decky Loader.
 
-[Unreleased]: https://github.com/silverfoxy/decktation/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/silverfoxy/decktation/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/silverfoxy/decktation/compare/v0.3.7...v0.3.8
+[0.3.7]: https://github.com/silverfoxy/decktation/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/silverfoxy/decktation/compare/v0.3.4...v0.3.6
 [0.3.4]: https://github.com/silverfoxy/decktation/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/silverfoxy/decktation/compare/v0.3.2...v0.3.3

@@ -26,14 +26,14 @@ type RpcResponse = { success: boolean; error?: string; [key: string]: any };
 const getStatus = callable<[], RpcResponse>("get_status");
 const getButtonConfig = callable<[], RpcResponse>("get_button_config");
 const getPresets = callable<[], RpcResponse>("get_presets");
-const setEnabled = callable<[enabled: boolean], RpcResponse>("set_enabled");
+const setEnabledRpc = callable<[enabled: boolean], RpcResponse>("set_enabled");
 const loadModel = callable<[], RpcResponse>("load_model");
 const startRecording = callable<[], RpcResponse>("start_recording");
 const stopRecording = callable<[send?: boolean], RpcResponse>("stop_recording");
 const getLastTranscription = callable<[], RpcResponse>("get_last_transcription");
-const setConfirmMode = callable<[enabled: boolean], RpcResponse>("set_confirm_mode");
-const setManualSend = callable<[enabled: boolean], RpcResponse>("set_manual_send");
-const setActivePreset = callable<[game: string], RpcResponse>("set_active_preset");
+const setConfirmModeRpc = callable<[enabled: boolean], RpcResponse>("set_confirm_mode");
+const setManualSendRpc = callable<[enabled: boolean], RpcResponse>("set_manual_send");
+const setActivePresetRpc = callable<[game: string], RpcResponse>("set_active_preset");
 const setButtonConfig = callable<
 	[buttons: string[], showNotifications: boolean],
 	RpcResponse
@@ -399,7 +399,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						onChange={async (e) => {
 							setEnabled(e);
 							logic.enabled = e;
-							await setEnabled(e);
+							await setEnabledRpc(e);
 							if (e && !modelReady) {
 								setModelLoading(true);
 								await loadModel();
@@ -423,7 +423,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 							logic.showNotifications = e;
 							if (!e && confirmMode) {
 								setConfirmMode(false);
-								await setConfirmMode(false);
+								await setConfirmModeRpc(false);
 							}
 							await setButtonConfig(buttons, e);
 						}}
@@ -437,7 +437,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						checked={confirmMode}
 						onChange={async (e) => {
 							setConfirmMode(e);
-							await setConfirmMode(e);
+							await setConfirmModeRpc(e);
 						}}
 					/>
 				</PanelSectionRow>
@@ -449,7 +449,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						checked={manualSend}
 						onChange={async (e) => {
 							setManualSend(e);
-							await setManualSend(e);
+							await setManualSendRpc(e);
 						}}
 					/>
 				</PanelSectionRow>
@@ -464,7 +464,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 							onChange={async (option) => {
 								const game = option.data as string;
 								setActivePreset(game);
-								await setActivePreset(game);
+								await setActivePresetRpc(game);
 							}}
 						/>
 					</PanelSectionRow>

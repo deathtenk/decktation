@@ -5,7 +5,7 @@
 
     var React__default = /*#__PURE__*/_interopDefaultLegacy(React);
 
-    var _manifest = {"name":"Decktation","version":"0.3.7","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
+    var _manifest = {"name":"Decktation","version":"0.3.8","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
 
     const manifest = _manifest;
     const API_VERSION = 2;
@@ -124,14 +124,14 @@
     const getStatus = callable("get_status");
     const getButtonConfig = callable("get_button_config");
     const getPresets = callable("get_presets");
-    callable("set_enabled");
+    const setEnabledRpc = callable("set_enabled");
     const loadModel = callable("load_model");
     const startRecording = callable("start_recording");
     const stopRecording = callable("stop_recording");
     const getLastTranscription = callable("get_last_transcription");
-    callable("set_confirm_mode");
-    callable("set_manual_send");
-    callable("set_active_preset");
+    const setConfirmModeRpc = callable("set_confirm_mode");
+    const setManualSendRpc = callable("set_manual_send");
+    const setActivePresetRpc = callable("set_active_preset");
     const setButtonConfig = callable("set_button_config");
     // Button IDs emitted by SteamClient.Input.RegisterForControllerInputMessages.
     // These match Steam's ControllerInputGamepadButton enum as observed by the
@@ -461,7 +461,7 @@
                     React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Enable Dictation", checked: enabled, disabled: !serviceReady || modelLoading, onChange: async (e) => {
                             setEnabled(e);
                             logic.enabled = e;
-                            await setEnabled(e);
+                            await setEnabledRpc(e);
                             if (e && !modelReady) {
                                 setModelLoading(true);
                                 await loadModel();
@@ -478,25 +478,25 @@
                             logic.showNotifications = e;
                             if (!e && confirmMode) {
                                 setConfirmMode(false);
-                                await setConfirmMode(false);
+                                await setConfirmModeRpc(false);
                             }
                             await setButtonConfig(buttons, e);
                         } })),
                 React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Confirm Before Sending", description: "Waits before typing (longer for more words) \u2014 hold the buttons again to cancel", checked: confirmMode, onChange: async (e) => {
                             setConfirmMode(e);
-                            await setConfirmMode(e);
+                            await setConfirmModeRpc(e);
                         } })),
                 React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Manual Send", description: "Type text into chat but let you press Enter to send", checked: manualSend, onChange: async (e) => {
                             setManualSend(e);
-                            await setManualSend(e);
+                            await setManualSendRpc(e);
                         } })),
                 presets.length > 0 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: "Game", menuLabel: "Select Game", rgOptions: presets, selectedOption: activePreset, onChange: async (option) => {
                             const game = option.data;
                             setActivePreset(game);
-                            await setActivePreset(game);
+                            await setActivePresetRpc(game);
                         } }))),
                 React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement("div", { style: {
