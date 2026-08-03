@@ -70,3 +70,16 @@ def test_disabled_diagnostics_do_not_create_events_or_traces(monkeypatch):
     assert telemetry.start_dictation_trace("wow", "steam_deck") is None
     capture_message.assert_not_called()
     start_transaction.assert_not_called()
+
+
+def test_each_failure_category_is_sent_once_per_session(monkeypatch):
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    monkeypatch.setattr(telemetry, "_captured_errors", set())
+    capture_message = MagicMock(return_value="event-id")
+    monkeypatch.setattr(telemetry.sentry_sdk, "capture_message", capture_message)
+
+    telemetry.capture_error("controller.device_not_found")
+    telemetry.capture_error("controller.device_not_found")
+    telemetry.capture_error("controller.hid_disconnected")
+
+    assert capture_message.call_count == 2

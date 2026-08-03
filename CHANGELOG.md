@@ -16,6 +16,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Added privacy-scrubbed Sentry diagnostics and sampled dictation tracing with
   success, preset, and generic controller-type fields.
 - Added an opt-in **Share Anonymous Diagnostics** setting, disabled by default.
+- Added rate-limited diagnostics for startup imports, model loading, recording,
+  transcription, text injection, controller discovery, HID disconnects, and
+  listener crashes.
 
 ### Changed
 

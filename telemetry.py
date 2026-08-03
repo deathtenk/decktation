@@ -13,6 +13,7 @@ SENTRY_DSN = (
 _HOME_PATH = re.compile(r"/(?:home/[^/\s]+|root)(?=/|\s|$)")
 _DEVICE_NAME = socket.gethostname()
 _enabled = False
+_captured_errors = set()
 
 
 def _scrub(value):
@@ -123,9 +124,10 @@ def breadcrumb(name, **data):
 
 def capture_error(name, error=None, **data):
     """Submit one searchable failure event with recent breadcrumbs."""
-    if not _enabled:
+    if not _enabled or name in _captured_errors:
         return None
-    with sentry_sdk.push_scope() as scope:
+    _captured_errors.add(name)
+    with sentry_sdk.new_scope() as scope:
         scope.set_tag("diagnostic_event", name)
         scope.set_context("decktation", _scrub(data))
         if error is not None:

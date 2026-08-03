@@ -18,8 +18,9 @@ import wave
 
 
 class WoWVoiceChat:
-    def __init__(self, context_file="wow_context.json", sample_rate=44100, default_channel="say", lazy_load=False, test_mode=False, test_audio_file=None, preset=None, confirm_delay=0, manual_send=False):
+    def __init__(self, context_file="wow_context.json", sample_rate=44100, default_channel="say", lazy_load=False, test_mode=False, test_audio_file=None, preset=None, confirm_delay=0, manual_send=False, diagnostic_reporter=None):
         self.preset = preset or {}
+        self.diagnostic_reporter = diagnostic_reporter
         self.context_file = Path(context_file)
         self.sample_rate = sample_rate  # Recording sample rate
         self.whisper_sample_rate = 16000  # Whisper expects 16kHz
@@ -60,6 +61,10 @@ class WoWVoiceChat:
 
         # Chat channel mappings - from preset or loaded config
         self.channel_commands = self.preset.get("channels") or self.default_channel_commands
+
+    def _report_diagnostic(self, name, error=None):
+        if self.diagnostic_reporter:
+            self.diagnostic_reporter(name, error)
 
     def _load_language_config(self):
         """Load language configuration for multi-language channel detection"""
@@ -137,6 +142,7 @@ class WoWVoiceChat:
         except Exception as e:
             print(f"Failed to load model: {e}")
             self.model_load_error = str(e)
+            self._report_diagnostic("model.load_failed", e)
             return False
         finally:
             self.model_loading = False
@@ -353,21 +359,24 @@ class WoWVoiceChat:
 
         # Passing decoded samples avoids shipping PyAV and its full FFmpeg
         # codec bundle for the WAV-only Decktation recording path.
-        segments, info = self.model.transcribe(
-            audio_input,
-            beam_size=5,
-            initial_prompt=initial_prompt,
-            hotwords=hotwords,
-            vad_filter=True,
-            condition_on_previous_text=False,
-        )
+        try:
+            segments, info = self.model.transcribe(
+                audio_input,
+                beam_size=5,
+                initial_prompt=initial_prompt,
+                hotwords=hotwords,
+                vad_filter=True,
+                condition_on_previous_text=False,
+            )
 
-        # Collect text
-        full_text = []
-        for segment in segments:
-            full_text.append(segment.text)
-
-        return "".join(full_text).strip()
+            # Segment generation is lazy and can fail during iteration.
+            full_text = []
+            for segment in segments:
+                full_text.append(segment.text)
+            return "".join(full_text).strip()
+        except Exception as e:
+            self._report_diagnostic("transcription.failed", e)
+            raise
 
     def parse_channel_and_text(self, text):
         """
@@ -475,6 +484,7 @@ class WoWVoiceChat:
                 logger.info(f"Using ydotool from PATH: {ydotool}")
             else:
                 logger.error("ydotool not found! Install it or run build_ydotool.sh")
+                self._report_diagnostic("text_injection.failed")
                 return
 
         # Use the private daemon managed by the Decky backend.
@@ -499,12 +509,14 @@ class WoWVoiceChat:
                 result = subprocess.run([ydotool, "key", "28:1", "28:0"], capture_output=True, text=True, env=env)
                 if result.returncode != 0:
                     logger.error(f"ydotool key failed: {result.stderr}")
+                    self._report_diagnostic("text_injection.failed")
                 time.sleep(0.1)
 
             # Type the full message with channel command
             result = subprocess.run([ydotool, "type", "--", full_message], capture_output=True, text=True, env=env)
             if result.returncode != 0:
                 logger.error(f"ydotool type failed: {result.stderr}")
+                self._report_diagnostic("text_injection.failed")
             time.sleep(0.1)
 
             # Press key to send (e.g. Enter for most games)
@@ -512,8 +524,10 @@ class WoWVoiceChat:
                 result = subprocess.run([ydotool, "key", "28:1", "28:0"], capture_output=True, text=True, env=env)
                 if result.returncode != 0:
                     logger.error(f"ydotool key failed: {result.stderr}")
+                    self._report_diagnostic("text_injection.failed")
         except Exception as e:
             logger.error(f"ydotool error: {e}")
+            self._report_diagnostic("text_injection.failed", e)
 
     def run_once(self, duration=5):
         """Record, transcribe, and send to chat once"""
@@ -610,6 +624,7 @@ class WoWVoiceChat:
                                 self.send_to_wow_chat(text)
                     except Exception as e:
                         print(f"[TEST MODE] Error: {e}")
+                        self._report_diagnostic("transcription.failed", e)
                 else:
                     print(f"[TEST MODE] Test audio file not found: {self.test_audio_file}")
                 return

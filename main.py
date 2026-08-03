@@ -83,6 +83,30 @@ try:
 except Exception as e:
     logger.error(f"Failed to import diagnostics: {e}")
 
+# Read consent before importing optional voice dependencies so startup import
+# failures can be captured for users who have opted in.
+decky_user_home = getattr(decky, "DECKY_USER_HOME", "/home/deck")
+CONFIG_DIR = getattr(
+    decky,
+    "DECKY_SETTINGS_DIR",
+    os.path.join(decky_user_home, "homebrew", "settings", "decktation"),
+)
+os.makedirs(CONFIG_DIR, exist_ok=True)
+BUTTON_CONFIG_FILE = os.path.join(CONFIG_DIR, "button_config.json")
+
+if telemetry_available:
+    try:
+        if os.path.exists(BUTTON_CONFIG_FILE):
+            with open(BUTTON_CONFIG_FILE, "r") as diagnostics_config_file:
+                diagnostics_config = json.load(diagnostics_config_file)
+            telemetry = bool(diagnostics_config.get("shareDiagnostics", False))
+        if telemetry:
+            initialize_telemetry(plugin_version)
+            telemetry_breadcrumb("plugin.initializing")
+    except Exception as e:
+        telemetry = False
+        logger.error(f"Failed to initialize diagnostics: {e}")
+
 # Debug: Log Python environment
 logger.info(f"Python executable: {sys.executable}")
 logger.info(f"Python version: {sys.version}")
@@ -107,32 +131,6 @@ PID_FILE = "/tmp/decktation_listener.pid"
 CONTROLLER_TYPE_FILE = "/tmp/decktation_controller_type"
 # Decktation owns this socket and never modifies a system ydotool service.
 YDOTOOL_SOCKET = "/tmp/decktation-ydotool.sock"
-
-# Root plugins must not persist settings below /root. Prefer Decky's user-owned
-# settings directory and retain a fallback for older loader releases.
-decky_user_home = getattr(decky, "DECKY_USER_HOME", "/home/deck")
-CONFIG_DIR = getattr(
-    decky,
-    "DECKY_SETTINGS_DIR",
-    os.path.join(decky_user_home, "homebrew", "settings", "decktation"),
-)
-os.makedirs(CONFIG_DIR, exist_ok=True)
-BUTTON_CONFIG_FILE = os.path.join(CONFIG_DIR, "button_config.json")
-
-# Diagnostics are disabled by default. Existing installations remain opted
-# out until the user explicitly enables anonymous diagnostics in the UI.
-if telemetry_available:
-    try:
-        if os.path.exists(BUTTON_CONFIG_FILE):
-            with open(BUTTON_CONFIG_FILE, "r") as diagnostics_config_file:
-                diagnostics_config = json.load(diagnostics_config_file)
-            telemetry = bool(diagnostics_config.get("shareDiagnostics", False))
-        if telemetry:
-            initialize_telemetry(plugin_version)
-            telemetry_breadcrumb("plugin.initializing")
-    except Exception as e:
-        telemetry = False
-        logger.error(f"Failed to initialize diagnostics: {e}")
 
 PRESETS_FILE = os.path.join(plugin_path, "game_presets.json")
 if not os.path.exists(PRESETS_FILE):
@@ -258,7 +256,19 @@ class Plugin:
         """Continuously forward child-process output into the plugin log."""
         try:
             for line in process.stdout:
-                logger.info(f"Child process: {line.rstrip()}")
+                message = line.rstrip()
+                logger.info(f"Child process: {message}")
+                if telemetry:
+                    if "raw HID interface not found" in message:
+                        telemetry_capture_error(
+                            "controller.device_not_found",
+                            controller_type=Plugin._controller_type(),
+                        )
+                    elif "Raw HID disconnected:" in message:
+                        telemetry_capture_error(
+                            "controller.hid_disconnected",
+                            controller_type=Plugin._controller_type(),
+                        )
         except Exception as e:
             logger.warning(f"Stopped reading child-process output: {e}")
 
@@ -376,8 +386,15 @@ class Plugin:
                             try:
                                 Plugin.voice_service.start_recording()
                                 Plugin.recording_start_count += 1
-                            except Exception:
+                            except Exception as e:
                                 Plugin._finish_dictation_trace(False)
+                                if telemetry:
+                                    telemetry_capture_error(
+                                        "recording.start_failed",
+                                        e,
+                                        preset=Plugin.active_preset,
+                                        controller_type=Plugin._controller_type(),
+                                    )
                                 raise
                     elif not state and last_state:
                         # Button released
@@ -385,8 +402,15 @@ class Plugin:
                         if Plugin.voice_service and Plugin.voice_service.is_recording:
                             try:
                                 Plugin.voice_service.stop_recording()
-                            except Exception:
+                            except Exception as e:
                                 Plugin._finish_dictation_trace(False)
+                                if telemetry:
+                                    telemetry_capture_error(
+                                        "recording.stop_failed",
+                                        e,
+                                        preset=Plugin.active_preset,
+                                        controller_type=Plugin._controller_type(),
+                                    )
                                 raise
                             else:
                                 Plugin._finish_dictation_trace(True)
@@ -405,7 +429,16 @@ class Plugin:
                     health_check_counter = 0
                     if Plugin.listener_process and Plugin.listener_process.poll() is not None:
                         logger.warning("Controller listener died, restarting...")
-                        Plugin.start_controller_listener()
+                        if telemetry:
+                            telemetry_capture_error(
+                                "controller.listener_crashed",
+                                controller_type=Plugin._controller_type(),
+                            )
+                        if not Plugin.start_controller_listener() and telemetry:
+                            telemetry_capture_error(
+                                "controller.listener_restart_failed",
+                                controller_type=Plugin._controller_type(),
+                            )
 
                 time.sleep(0.05)  # 50ms polling interval
             except Exception as e:
@@ -461,7 +494,16 @@ class Plugin:
                 test_audio_file=None,
                 preset=active_preset,
                 confirm_delay=2.0 if confirm_mode else 0,
-                manual_send=manual_send
+                manual_send=manual_send,
+                diagnostic_reporter=lambda name, error=None: (
+                    telemetry_capture_error(
+                        name,
+                        error,
+                        preset=Plugin.active_preset,
+                        controller_type=Plugin._controller_type(),
+                    )
+                    if telemetry else None
+                ),
             )
             logger.info("Voice service initialized (model will load on first use)")
             if telemetry:
@@ -756,8 +798,15 @@ class Plugin:
             Plugin._start_dictation_trace()
             try:
                 Plugin.voice_service.start_recording()
-            except Exception:
+            except Exception as e:
                 Plugin._finish_dictation_trace(False)
+                if telemetry:
+                    telemetry_capture_error(
+                        "recording.start_failed",
+                        e,
+                        preset=Plugin.active_preset,
+                        controller_type=Plugin._controller_type(),
+                    )
                 raise
             return {"success": True}
         except Exception as e:
@@ -777,8 +826,15 @@ class Plugin:
             # transcription.
             try:
                 await asyncio.to_thread(Plugin.voice_service.stop_recording, send)
-            except Exception:
+            except Exception as e:
                 Plugin._finish_dictation_trace(False)
+                if telemetry:
+                    telemetry_capture_error(
+                        "recording.stop_failed",
+                        e,
+                        preset=Plugin.active_preset,
+                        controller_type=Plugin._controller_type(),
+                    )
                 raise
             else:
                 Plugin._finish_dictation_trace(True)
