@@ -31,8 +31,10 @@ plugin_path = os.environ["DECKY_PLUGIN_DIR"]
 
 # Add bundled dependencies to Python path
 dependency_paths = [
-    os.path.join(plugin_path, "bin", "python"),  # Decky store backend output
     os.path.join(plugin_path, "lib"),  # Legacy GitHub release layout
+    # Insert the marketplace runtime last so it takes precedence over stale
+    # legacy packages when an existing installation is replaced in place.
+    os.path.join(plugin_path, "bin", "python"),
 ]
 for dependency_path in dependency_paths:
     if os.path.exists(dependency_path):

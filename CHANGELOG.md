@@ -29,6 +29,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   events and transactions.
 - Fixed legacy local updates installing Python packages directly into
   root-owned plugin directories.
+- Ensured marketplace-bundled Python packages take precedence over stale
+  dependencies left by legacy installations.
 
 ## [0.3.8] - 2026-08-01
 
