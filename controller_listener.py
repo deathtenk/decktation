@@ -15,6 +15,7 @@ from deck_hid import STEAM_DECK_BUTTON_BITS, raw_button_states
 STATE_FILE = "/tmp/decktation_l5"
 PREVIEW_FILE = "/tmp/decktation_button_preview"
 PID_FILE = "/tmp/decktation_listener.pid"
+CONTROLLER_TYPE_FILE = "/tmp/decktation_controller_type"
 # The Decky backend passes its user-owned settings directory. The fallback is
 # retained for standalone development runs.
 CONFIG_DIR = os.environ.get(
@@ -28,7 +29,19 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "button_config.json")
 # report, independent of the active Steam Input layout.
 RAW_BUTTON_BITS = STEAM_DECK_BUTTON_BITS
 
-STEAM_DECK_HID_ID = "0003:000028DE:00001205"
+STEAM_HID_INTERFACES = {
+    # Steam Deck vendor controller interface.
+    "0003:000028DE:00001205": ("/input2",),
+    # Original Steam Controller, wired and wireless receiver. The receiver has
+    # appeared as input1 and input2 across hid-steam/kernel versions.
+    "0003:000028DE:00001102": ("/input2",),
+    "0003:000028DE:00001142": ("/input1", "/input2"),
+}
+STEAM_CONTROLLER_TYPES = {
+    "0003:000028DE:00001205": "steam_deck",
+    "0003:000028DE:00001102": "steam_controller_wired",
+    "0003:000028DE:00001142": "steam_controller_wireless",
+}
 
 def write_button_preview(name, pressed):
     """Publish the latest pressed button for the plugin test display.
@@ -60,7 +73,7 @@ def load_button_config():
     return ["L1", "R1"]
 
 def find_steam_deck_hidraw():
-    """Find the Steam Deck vendor-defined HID interface containing raw reports."""
+    """Find a Valve vendor HID interface containing raw controller reports."""
     for path in glob.glob("/dev/hidraw*"):
         name = os.path.basename(path)
         uevent_path = f"/sys/class/hidraw/{name}/device/uevent"
@@ -71,10 +84,11 @@ def find_steam_deck_hidraw():
                     for line in f
                     if "=" in line
                 )
-            if (
-                properties.get("HID_ID") == STEAM_DECK_HID_ID
-                and properties.get("HID_PHYS", "").endswith("/input2")
-            ):
+            hid_id = properties.get("HID_ID")
+            interface_suffixes = STEAM_HID_INTERFACES.get(hid_id, ())
+            if properties.get("HID_PHYS", "").endswith(interface_suffixes):
+                with open(CONTROLLER_TYPE_FILE, "w") as controller_file:
+                    controller_file.write(STEAM_CONTROLLER_TYPES[hid_id])
                 return path
         except (OSError, ValueError):
             continue
@@ -138,10 +152,10 @@ def main():
         while True:
             path = find_steam_deck_hidraw()
             if not path:
-                print("Steam Deck raw HID interface not found; retrying...", flush=True)
+                print("Supported Valve raw HID interface not found; retrying...", flush=True)
                 time.sleep(2)
                 continue
-            print(f"Listening for raw Steam Deck controls on: {path}", flush=True)
+            print(f"Listening for raw Valve controller controls on: {path}", flush=True)
             try:
                 # The DeckShock reference implementation opens this vendor HID
                 # interface read/write. Some hid-steam versions do not deliver
@@ -162,13 +176,16 @@ def main():
                         if states is None:
                             # The interface can also emit battery/status packets.
                             continue
-                        for name, pressed in states.items():
+                        for name in RAW_BUTTON_BITS:
+                            pressed = states.get(name, False)
                             if pressed != previous_states[name]:
                                 previous_states[name] = pressed
                                 write_button_preview(name, pressed)
                         changed = False
                         for btn in button_info:
-                            pressed = states[btn["name"]]
+                            # The original Steam Controller has only two grips,
+                            # exposed as L5/R5. Deck-only L4/R4 remain released.
+                            pressed = states.get(btn["name"], False)
                             if pressed != btn["pressed"]:
                                 btn["pressed"] = pressed
                                 changed = True
@@ -192,6 +209,7 @@ def main():
             os.remove(STATE_FILE)
             os.remove(PID_FILE)
             os.remove(PREVIEW_FILE)
+            os.remove(CONTROLLER_TYPE_FILE)
         except:
             pass
 

@@ -7,6 +7,28 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-08-03
+
+### Added
+
+- Added wired and wireless original Steam Controller support using Linux's
+  native raw HID report mappings.
+- Added privacy-scrubbed Sentry diagnostics and sampled dictation tracing with
+  success, preset, and generic controller-type fields.
+
+### Changed
+
+- Bundled the Sentry SDK in marketplace builds so client devices do not need
+  to install runtime dependencies.
+
+### Fixed
+
+- Removed hostnames, user and request data, IP fields, device metadata, local
+  variables, raw exception messages, and other personal data from diagnostic
+  events and transactions.
+- Fixed legacy local updates installing Python packages directly into
+  root-owned plugin directories.
+
 ## [0.3.8] - 2026-08-01
 
 ### Fixed

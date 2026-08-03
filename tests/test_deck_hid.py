@@ -1,4 +1,8 @@
-from deck_hid import STEAM_DECK_BUTTON_BITS, raw_button_states
+from deck_hid import (
+    STEAM_CONTROLLER_BUTTON_BITS,
+    STEAM_DECK_BUTTON_BITS,
+    raw_button_states,
+)
 
 
 def make_report():
@@ -69,3 +73,30 @@ def test_other_steam_hid_report_types_are_ignored():
     set_bit(report, 8, 6)
 
     assert raw_button_states(report) is None
+
+
+def test_original_steam_controller_buttons_are_decoded():
+    report = make_report()
+    report[2] = 1
+    set_bit(report, 8, 3)  # L1
+    set_bit(report, 9, 7)  # left rear grip / frontend L5
+
+    states = raw_button_states(report)
+
+    assert states["L1"] is True
+    assert states["L5"] is True
+    assert states["R5"] is False
+    assert "L4" not in states
+    assert set(states) == set(STEAM_CONTROLLER_BUTTON_BITS)
+
+
+def test_original_steam_controller_analog_triggers_activate_at_half_pull():
+    report = make_report()
+    report[2] = 1
+    report[11] = 128
+    report[12] = 127
+
+    states = raw_button_states(report)
+
+    assert states["L2"] is True
+    assert states["R2"] is False

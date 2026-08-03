@@ -38,6 +38,7 @@ echo "Copying files..."
 cp "$SOURCE_DIR/main.py" "$PLUGIN_DIR/"
 cp "$SOURCE_DIR/controller_listener.py" "$PLUGIN_DIR/"
 cp "$SOURCE_DIR/deck_hid.py" "$PLUGIN_DIR/"
+cp "$SOURCE_DIR/telemetry.py" "$PLUGIN_DIR/"
 cp "$SOURCE_DIR/wow_voice_chat.py" "$PLUGIN_DIR/"
 cp "$SOURCE_DIR/convert_wow_context.py" "$PLUGIN_DIR/"
 cp "$SOURCE_DIR/defaults/game_presets.json" "$PLUGIN_DIR/"
@@ -79,6 +80,8 @@ echo "This may take a few minutes..."
 # Use the venv pip if available, otherwise try to find pip
 if [ -f "$SOURCE_DIR/venv/bin/pip" ]; then
     PIP="$SOURCE_DIR/venv/bin/pip"
+elif [ -f "$SOURCE_DIR/.venv/bin/pip" ]; then
+    PIP="$SOURCE_DIR/.venv/bin/pip"
 elif command -v pip3 &> /dev/null; then
     PIP="pip3"
 elif command -v pip &> /dev/null; then
@@ -97,7 +100,8 @@ $PIP install --target "$PLUGIN_DIR/lib" \
     av \
     faster-whisper \
     sounddevice \
-    numpy
+    numpy \
+    sentry-sdk==2.66.0
 
 echo "✓ Dependencies installed"
 echo ""
@@ -106,6 +110,7 @@ echo ""
 echo "Setting permissions..."
 chmod 644 "$PLUGIN_DIR/main.py"
 chmod 644 "$PLUGIN_DIR/deck_hid.py"
+chmod 644 "$PLUGIN_DIR/telemetry.py"
 chmod 644 "$PLUGIN_DIR/wow_voice_chat.py"
 chmod 644 "$PLUGIN_DIR/convert_wow_context.py"
 chmod 755 "$PLUGIN_DIR/controller_listener.py"
@@ -125,6 +130,12 @@ if [ -d "$PLUGIN_DIR/lib/faster_whisper" ]; then
     echo "✓ faster-whisper installed"
 else
     echo "✗ faster-whisper missing!"
+fi
+
+if [ -d "$PLUGIN_DIR/lib/sentry_sdk" ]; then
+    echo "✓ sentry-sdk installed"
+else
+    echo "✗ sentry-sdk missing!"
 fi
 
 if [ -f "$PLUGIN_DIR/dist/index.js" ]; then

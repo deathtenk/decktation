@@ -50,9 +50,25 @@ echo "  → Core Python files..."
 sudo cp "$SOURCE_DIR/main.py" "$PLUGIN_DIR/"
 sudo cp "$SOURCE_DIR/controller_listener.py" "$PLUGIN_DIR/"
 sudo cp "$SOURCE_DIR/deck_hid.py" "$PLUGIN_DIR/"
+sudo cp "$SOURCE_DIR/telemetry.py" "$PLUGIN_DIR/"
 sudo cp "$SOURCE_DIR/wow_voice_chat.py" "$PLUGIN_DIR/"
 sudo cp "$SOURCE_DIR/convert_wow_context.py" "$PLUGIN_DIR/"
 sudo cp -R "$SOURCE_DIR/lib/" "$PLUGIN_DIR/"
+
+# Telemetry was added after the legacy lib bundle was created. Install it
+# explicitly so local source-tree updates match marketplace artifacts.
+echo "  → Sentry SDK..."
+if [ -x "$SOURCE_DIR/venv/bin/pip" ]; then
+  PIP="$SOURCE_DIR/venv/bin/pip"
+elif [ -x "$SOURCE_DIR/.venv/bin/pip" ]; then
+  PIP="$SOURCE_DIR/.venv/bin/pip"
+else
+  PIP="python3 -m pip"
+fi
+SDK_TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$SDK_TMP_DIR"' EXIT
+$PIP install --target "$SDK_TMP_DIR" sentry-sdk==2.66.0
+sudo cp -R "$SDK_TMP_DIR/." "$PLUGIN_DIR/lib/"
 
 # Built frontend
 echo "  → Frontend (dist/index.js)..."
@@ -107,6 +123,7 @@ echo ""
 echo "Setting permissions..."
 sudo chmod +x "$PLUGIN_DIR/main.py"
 sudo chmod +x "$PLUGIN_DIR/controller_listener.py"
+sudo chmod 644 "$PLUGIN_DIR/telemetry.py"
 echo "✓ Permissions set"
 echo ""
 

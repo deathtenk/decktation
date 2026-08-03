@@ -18,9 +18,9 @@ jobs:
         with:
           python-version: '3.13'
       - run: node scripts/release-version.mjs check
-      - run: pip install pytest
+      - run: pip install pytest sentry-sdk==2.66.0
       - run: pytest tests/ -v
-      - run: python -m py_compile main.py wow_voice_chat.py controller_listener.py deck_hid.py
+      - run: python -m py_compile main.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py
 
   build:
     runs-on: ubuntu-latest
@@ -50,7 +50,9 @@ jobs:
           unzip -t build-output/decktation.zip
           unzip -l build-output/decktation.zip | grep -q 'decktation/bin/ydotoold'
           unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/faster_whisper'
+          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/sentry_sdk'
           unzip -l build-output/decktation.zip | grep -q 'decktation/bin/lib/libportaudio.so.2'
+          unzip -l build-output/decktation.zip | grep -q 'decktation/telemetry.py'
           unzip -l build-output/decktation.zip | grep -q 'decktation/game_presets.json'
           unzip -l build-output/decktation.zip | grep -q 'decktation/channel_languages.json'
           unzip -l build-output/decktation.zip | grep -q 'cpython-311'

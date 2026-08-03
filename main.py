@@ -59,6 +59,27 @@ if os.path.isfile(bundled_portaudio):
 # Add our service to Python path
 sys.path.insert(0, plugin_path)
 
+# Initialize privacy-safe diagnostics before importing the voice service so
+# import and startup failures can be reported.
+telemetry = None
+try:
+    from telemetry import (
+        breadcrumb as telemetry_breadcrumb,
+        capture_error as telemetry_capture_error,
+        flush as telemetry_flush,
+        finish_dictation_trace as telemetry_finish_dictation,
+        initialize as initialize_telemetry,
+        start_dictation_trace as telemetry_start_dictation,
+    )
+
+    with open(os.path.join(plugin_path, "plugin.json"), "r") as version_file:
+        plugin_version = json.load(version_file).get("version", "unknown")
+    initialize_telemetry(plugin_version)
+    telemetry = True
+    telemetry_breadcrumb("plugin.initializing")
+except Exception as e:
+    logger.error(f"Failed to initialize diagnostics: {e}")
+
 # Debug: Log Python environment
 logger.info(f"Python executable: {sys.executable}")
 logger.info(f"Python version: {sys.version}")
@@ -73,11 +94,14 @@ try:
 except ImportError as e:
     logger.error(f"Failed to import WoWVoiceChat: {e}")
     logger.error(f"Traceback: {traceback.format_exc()}")
+    if telemetry:
+        telemetry_capture_error("voice_service.import_failed", e)
 
 # File paths for subprocess communication
 STATE_FILE = "/tmp/decktation_l5"
 PREVIEW_FILE = "/tmp/decktation_button_preview"
 PID_FILE = "/tmp/decktation_listener.pid"
+CONTROLLER_TYPE_FILE = "/tmp/decktation_controller_type"
 # Decktation owns this socket and never modifies a system ydotool service.
 YDOTOOL_SOCKET = "/tmp/decktation-ydotool.sock"
 
@@ -117,6 +141,30 @@ class Plugin:
     poll_running = False
     controller_enabled = False
     recording_start_count = 0  # Increments each time recording starts
+    active_preset = "wow"
+    dictation_transaction = None
+
+    @staticmethod
+    def _controller_type():
+        try:
+            with open(CONTROLLER_TYPE_FILE, "r") as controller_file:
+                return controller_file.read().strip() or "unknown"
+        except OSError:
+            return "unknown"
+
+    @staticmethod
+    def _start_dictation_trace():
+        if telemetry:
+            Plugin.dictation_transaction = telemetry_start_dictation(
+                Plugin.active_preset,
+                Plugin._controller_type(),
+            )
+
+    @staticmethod
+    def _finish_dictation_trace(success):
+        if telemetry:
+            telemetry_finish_dictation(Plugin.dictation_transaction, success)
+        Plugin.dictation_transaction = None
 
     @staticmethod
     def start_ydotoold():
@@ -272,7 +320,7 @@ class Plugin:
                 Plugin.listener_process = None
 
             # Clean up files
-            for f in [STATE_FILE, PREVIEW_FILE, PID_FILE]:
+            for f in [STATE_FILE, PREVIEW_FILE, PID_FILE, CONTROLLER_TYPE_FILE]:
                 if os.path.exists(f):
                     os.remove(f)
         except Exception as e:
@@ -305,13 +353,24 @@ class Plugin:
                                 logger.info("Pending send cancelled by button press")
                         elif Plugin.voice_service and not Plugin.voice_service.is_recording:
                             logger.info("Button combo pressed - starting recording")
-                            Plugin.voice_service.start_recording()
-                            Plugin.recording_start_count += 1
+                            Plugin._start_dictation_trace()
+                            try:
+                                Plugin.voice_service.start_recording()
+                                Plugin.recording_start_count += 1
+                            except Exception:
+                                Plugin._finish_dictation_trace(False)
+                                raise
                     elif not state and last_state:
                         # Button released
                         logger.info("Button combo released - stopping recording")
                         if Plugin.voice_service and Plugin.voice_service.is_recording:
-                            Plugin.voice_service.stop_recording()
+                            try:
+                                Plugin.voice_service.stop_recording()
+                            except Exception:
+                                Plugin._finish_dictation_trace(False)
+                                raise
+                            else:
+                                Plugin._finish_dictation_trace(True)
 
                     last_state = state
 
@@ -359,6 +418,7 @@ class Plugin:
                 logger.error(f"Error reading active game from config: {e}")
 
             active_preset = _game_presets.get(active_game, _game_presets.get("wow", {}))
+            Plugin.active_preset = active_game
             logger.info(f"Active game preset: {active_game}")
 
             confirm_mode = False
@@ -385,6 +445,8 @@ class Plugin:
                 manual_send=manual_send
             )
             logger.info("Voice service initialized (model will load on first use)")
+            if telemetry:
+                telemetry_breadcrumb("voice_service.initialized")
 
             # Restore enabled state from config
             try:
@@ -404,11 +466,17 @@ class Plugin:
                 Plugin.poll_thread = threading.Thread(target=Plugin.poll_button_state, daemon=True)
                 Plugin.poll_thread.start()
                 logger.info("Controller input ready (using external listener)")
+                if telemetry:
+                    telemetry_breadcrumb("controller.listener_started")
             else:
                 logger.error("Failed to start controller listener")
+                if telemetry:
+                    telemetry_capture_error("controller.listener_start_failed")
 
         except Exception as e:
             logger.error(f"Failed to initialize: {traceback.format_exc()}")
+            if telemetry:
+                telemetry_capture_error("plugin.initialization_failed", e)
         return
 
     async def _unload(self):
@@ -420,8 +488,13 @@ class Plugin:
             Plugin.stop_ydotoold()
             if Plugin.voice_service and Plugin.voice_service.is_recording:
                 Plugin.voice_service.stop_recording()
+                Plugin._finish_dictation_trace(False)
         except Exception as e:
             logger.error(f"Error during unload: {traceback.format_exc()}")
+            if telemetry:
+                telemetry_capture_error("plugin.unload_failed", e)
+        if telemetry:
+            telemetry_flush()
         return
 
     async def _uninstall(self):
@@ -614,6 +687,7 @@ class Plugin:
             # Update running voice service
             if Plugin.voice_service:
                 Plugin.voice_service.set_preset(_game_presets[game])
+            Plugin.active_preset = game
 
             logger.info(f"Switched game preset to: {game}")
             return {"success": True}
@@ -629,7 +703,12 @@ class Plugin:
                 return {"success": False, "error": "Service not initialized"}
 
             logger.info("Starting recording")
-            Plugin.voice_service.start_recording()
+            Plugin._start_dictation_trace()
+            try:
+                Plugin.voice_service.start_recording()
+            except Exception:
+                Plugin._finish_dictation_trace(False)
+                raise
             return {"success": True}
         except Exception as e:
             logger.error(f"Error starting recording: {traceback.format_exc()}")
@@ -646,7 +725,13 @@ class Plugin:
             # Stream shutdown happens promptly in the worker, while Decky's
             # event loop remains available for status/UI requests during
             # transcription.
-            await asyncio.to_thread(Plugin.voice_service.stop_recording, send)
+            try:
+                await asyncio.to_thread(Plugin.voice_service.stop_recording, send)
+            except Exception:
+                Plugin._finish_dictation_trace(False)
+                raise
+            else:
+                Plugin._finish_dictation_trace(True)
             return {"success": True}
         except Exception as e:
             logger.error(f"Error stopping recording: {traceback.format_exc()}")

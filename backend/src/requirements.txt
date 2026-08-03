@@ -20,6 +20,7 @@ packaging==26.0
 protobuf==6.33.5
 pycparser==3.0
 PyYAML==6.0.3
+sentry-sdk==2.66.0
 shellingham==1.5.4
 sounddevice==0.5.5
 sympy==1.14.0
@@ -27,3 +28,4 @@ tokenizers==0.22.2
 tqdm==4.67.3
 typer-slim==0.21.1
 typing-extensions==4.15.0
+urllib3==2.7.0
