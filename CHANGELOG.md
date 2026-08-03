@@ -15,6 +15,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   native raw HID report mappings.
 - Added privacy-scrubbed Sentry diagnostics and sampled dictation tracing with
   success, preset, and generic controller-type fields.
+- Added an opt-in **Share Anonymous Diagnostics** setting, disabled by default.
 
 ### Changed
 

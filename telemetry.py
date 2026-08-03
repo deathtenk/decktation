@@ -12,6 +12,7 @@ SENTRY_DSN = (
 )
 _HOME_PATH = re.compile(r"/(?:home/[^/\s]+|root)(?=/|\s|$)")
 _DEVICE_NAME = socket.gethostname()
+_enabled = False
 
 
 def _scrub(value):
@@ -71,6 +72,7 @@ def _before_send(event, hint):
 
 def initialize(version):
     """Initialize Sentry without automatic PII or raw-log collection."""
+    global _enabled
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         release=f"decktation@{version}",
@@ -85,12 +87,32 @@ def initialize(version):
         include_local_variables=False,
         attach_stacktrace=False,
         auto_session_tracking=False,
+        send_client_reports=False,
     )
     sentry_sdk.set_tag("component", "decky-backend")
+    _enabled = True
+
+
+def set_enabled(enabled, version):
+    """Apply the user's diagnostics preference immediately."""
+    global _enabled
+    if enabled and not _enabled:
+        initialize(version)
+        breadcrumb("diagnostics.enabled")
+    elif not enabled and _enabled:
+        flush()
+        _enabled = False
+        sentry_sdk.get_client().close(timeout=2)
+
+
+def is_enabled():
+    return _enabled
 
 
 def breadcrumb(name, **data):
     """Record a successful lifecycle step without consuming an error event."""
+    if not _enabled:
+        return
     sentry_sdk.add_breadcrumb(
         category="decktation",
         message=name,
@@ -101,6 +123,8 @@ def breadcrumb(name, **data):
 
 def capture_error(name, error=None, **data):
     """Submit one searchable failure event with recent breadcrumbs."""
+    if not _enabled:
+        return None
     with sentry_sdk.push_scope() as scope:
         scope.set_tag("diagnostic_event", name)
         scope.set_context("decktation", _scrub(data))
@@ -115,6 +139,8 @@ def capture_error(name, error=None, **data):
 
 
 def start_dictation_trace(preset, controller_type):
+    if not _enabled:
+        return None
     transaction = sentry_sdk.start_transaction(
         name="dictation",
         op="decktation.dictation",
@@ -136,4 +162,5 @@ def finish_dictation_trace(transaction, success):
 
 
 def flush(timeout=2):
-    sentry_sdk.flush(timeout=timeout)
+    if _enabled:
+        sentry_sdk.flush(timeout=timeout)

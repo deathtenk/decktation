@@ -33,6 +33,7 @@ const stopRecording = callable<[send?: boolean], RpcResponse>("stop_recording");
 const getLastTranscription = callable<[], RpcResponse>("get_last_transcription");
 const setConfirmModeRpc = callable<[enabled: boolean], RpcResponse>("set_confirm_mode");
 const setManualSendRpc = callable<[enabled: boolean], RpcResponse>("set_manual_send");
+const setShareDiagnosticsRpc = callable<[enabled: boolean], RpcResponse>("set_share_diagnostics");
 const setActivePresetRpc = callable<[game: string], RpcResponse>("set_active_preset");
 const setButtonConfig = callable<
 	[buttons: string[], showNotifications: boolean],
@@ -259,6 +260,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 	const [presets, setPresets] = useState<DropdownOption[]>([]);
 	const [confirmMode, setConfirmMode] = useState<boolean>(false);
 	const [manualSend, setManualSend] = useState<boolean>(false);
+	const [shareDiagnostics, setShareDiagnostics] = useState<boolean>(false);
 	const [lastTranscription, setLastTranscription] = useState<string>("");
 	const [lastTranscriptionTime, setLastTranscriptionTime] = useState<string>("");
 	const [rpcError, setRpcError] = useState<string>("");
@@ -290,6 +292,9 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 					}
 					if (config.manualSend !== undefined) {
 						setManualSend(config.manualSend);
+					}
+					if (config.shareDiagnostics !== undefined) {
+						setShareDiagnostics(config.shareDiagnostics);
 					}
 					// Restore enabled state
 					if (config.enabled) {
@@ -450,6 +455,22 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						onChange={async (e) => {
 							setManualSend(e);
 							await setManualSendRpc(e);
+						}}
+					/>
+				</PanelSectionRow>
+
+				<PanelSectionRow>
+					<ToggleField
+						label="Share Anonymous Diagnostics"
+						description="Share privacy-scrubbed errors and performance data to help improve Decktation"
+						checked={shareDiagnostics}
+						onChange={async (e) => {
+							setShareDiagnostics(e);
+							const result = await setShareDiagnosticsRpc(e);
+							if (!result.success) {
+								setShareDiagnostics(!e);
+								setRpcError(result.error || "Could not update diagnostics setting");
+							}
 						}}
 					/>
 				</PanelSectionRow>

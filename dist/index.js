@@ -5,7 +5,7 @@
 
     var React__default = /*#__PURE__*/_interopDefaultLegacy(React);
 
-    var _manifest = {"name":"Decktation","version":"0.3.8","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
+    var _manifest = {"name":"Decktation","version":"0.3.9","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
 
     const manifest = _manifest;
     const API_VERSION = 2;
@@ -131,6 +131,7 @@
     const getLastTranscription = callable("get_last_transcription");
     const setConfirmModeRpc = callable("set_confirm_mode");
     const setManualSendRpc = callable("set_manual_send");
+    const setShareDiagnosticsRpc = callable("set_share_diagnostics");
     const setActivePresetRpc = callable("set_active_preset");
     const setButtonConfig = callable("set_button_config");
     // Button IDs emitted by SteamClient.Input.RegisterForControllerInputMessages.
@@ -342,6 +343,7 @@
         const [presets, setPresets] = React.useState([]);
         const [confirmMode, setConfirmMode] = React.useState(false);
         const [manualSend, setManualSend] = React.useState(false);
+        const [shareDiagnostics, setShareDiagnostics] = React.useState(false);
         const [lastTranscription, setLastTranscription] = React.useState("");
         const [lastTranscriptionTime, setLastTranscriptionTime] = React.useState("");
         const [rpcError, setRpcError] = React.useState("");
@@ -371,6 +373,9 @@
                         }
                         if (config.manualSend !== undefined) {
                             setManualSend(config.manualSend);
+                        }
+                        if (config.shareDiagnostics !== undefined) {
+                            setShareDiagnostics(config.shareDiagnostics);
                         }
                         // Restore enabled state
                         if (config.enabled) {
@@ -491,6 +496,15 @@
                     React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Manual Send", description: "Type text into chat but let you press Enter to send", checked: manualSend, onChange: async (e) => {
                             setManualSend(e);
                             await setManualSendRpc(e);
+                        } })),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Share Anonymous Diagnostics", description: "Share privacy-scrubbed errors and performance data to help improve Decktation", checked: shareDiagnostics, onChange: async (e) => {
+                            setShareDiagnostics(e);
+                            const result = await setShareDiagnosticsRpc(e);
+                            if (!result.success) {
+                                setShareDiagnostics(!e);
+                                setRpcError(result.error || "Could not update diagnostics setting");
+                            }
                         } })),
                 presets.length > 0 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: "Game", menuLabel: "Select Game", rgOptions: presets, selectedOption: activePreset, onChange: async (option) => {

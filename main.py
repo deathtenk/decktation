@@ -59,9 +59,11 @@ if os.path.isfile(bundled_portaudio):
 # Add our service to Python path
 sys.path.insert(0, plugin_path)
 
-# Initialize privacy-safe diagnostics before importing the voice service so
-# import and startup failures can be reported.
-telemetry = None
+# Import diagnostics support without connecting to Sentry. Collection is
+# opt-in and is initialized only after the persisted user preference is read.
+telemetry = False
+telemetry_available = False
+plugin_version = "unknown"
 try:
     from telemetry import (
         breadcrumb as telemetry_breadcrumb,
@@ -69,16 +71,15 @@ try:
         flush as telemetry_flush,
         finish_dictation_trace as telemetry_finish_dictation,
         initialize as initialize_telemetry,
+        set_enabled as telemetry_set_enabled,
         start_dictation_trace as telemetry_start_dictation,
     )
 
     with open(os.path.join(plugin_path, "plugin.json"), "r") as version_file:
         plugin_version = json.load(version_file).get("version", "unknown")
-    initialize_telemetry(plugin_version)
-    telemetry = True
-    telemetry_breadcrumb("plugin.initializing")
+    telemetry_available = True
 except Exception as e:
-    logger.error(f"Failed to initialize diagnostics: {e}")
+    logger.error(f"Failed to import diagnostics: {e}")
 
 # Debug: Log Python environment
 logger.info(f"Python executable: {sys.executable}")
@@ -115,6 +116,22 @@ CONFIG_DIR = getattr(
 )
 os.makedirs(CONFIG_DIR, exist_ok=True)
 BUTTON_CONFIG_FILE = os.path.join(CONFIG_DIR, "button_config.json")
+
+# Diagnostics are disabled by default. Existing installations remain opted
+# out until the user explicitly enables anonymous diagnostics in the UI.
+if telemetry_available:
+    try:
+        if os.path.exists(BUTTON_CONFIG_FILE):
+            with open(BUTTON_CONFIG_FILE, "r") as diagnostics_config_file:
+                diagnostics_config = json.load(diagnostics_config_file)
+            telemetry = bool(diagnostics_config.get("shareDiagnostics", False))
+        if telemetry:
+            initialize_telemetry(plugin_version)
+            telemetry_breadcrumb("plugin.initializing")
+    except Exception as e:
+        telemetry = False
+        logger.error(f"Failed to initialize diagnostics: {e}")
+
 PRESETS_FILE = os.path.join(plugin_path, "game_presets.json")
 if not os.path.exists(PRESETS_FILE):
     # Decky's builder installs the contents of defaults/ at the plugin root.
@@ -162,7 +179,7 @@ class Plugin:
 
     @staticmethod
     def _finish_dictation_trace(success):
-        if telemetry:
+        if telemetry_available:
             telemetry_finish_dictation(Plugin.dictation_transaction, success)
         Plugin.dictation_transaction = None
 
@@ -548,12 +565,43 @@ class Plugin:
                         config["confirmMode"] = False
                     if "manualSend" not in config:
                         config["manualSend"] = False
+                    if "shareDiagnostics" not in config:
+                        config["shareDiagnostics"] = False
                     return {"success": True, "config": config}
             else:
                 # Default: L1+R1, notifications enabled, not enabled, wow preset, no confirm, auto send
-                return {"success": True, "config": {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow", "confirmMode": False, "manualSend": False}}
+                return {"success": True, "config": {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow", "confirmMode": False, "manualSend": False, "shareDiagnostics": False}}
         except Exception as e:
             logger.error(f"Error getting button config: {traceback.format_exc()}")
+            return {"success": False, "error": str(e)}
+
+    async def set_share_diagnostics(self, enabled: bool):
+        """Persist and immediately apply anonymous diagnostics consent."""
+        global telemetry
+        try:
+            config = {
+                "buttons": ["L1", "R1"],
+                "showNotifications": True,
+                "enabled": False,
+                "game": "wow",
+            }
+            if os.path.exists(BUTTON_CONFIG_FILE):
+                with open(BUTTON_CONFIG_FILE, "r") as config_file:
+                    config = json.load(config_file)
+            config["shareDiagnostics"] = bool(enabled)
+            with open(BUTTON_CONFIG_FILE, "w") as config_file:
+                json.dump(config, config_file)
+
+            telemetry = bool(enabled) and telemetry_available
+            if telemetry_available:
+                telemetry_set_enabled(telemetry, plugin_version)
+            logger.info(
+                f"Anonymous diagnostics {'enabled' if telemetry else 'disabled'}"
+            )
+            return {"success": True, "enabled": telemetry}
+        except Exception as e:
+            telemetry = False
+            logger.error(f"Error saving diagnostics preference: {e}")
             return {"success": False, "error": str(e)}
 
     async def set_button_config(self, buttons: list, showNotifications: bool = True):

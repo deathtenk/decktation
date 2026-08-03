@@ -12,6 +12,7 @@ def test_settings_rpc_functions_are_not_shadowed_by_react_state_setters():
         "set_confirm_mode": "setConfirmModeRpc",
         "set_manual_send": "setManualSendRpc",
         "set_active_preset": "setActivePresetRpc",
+        "set_share_diagnostics": "setShareDiagnosticsRpc",
     }
 
     for backend_method, rpc_name in expected_calls.items():

@@ -4,6 +4,7 @@ import telemetry
 
 
 def test_dictation_trace_contains_only_requested_diagnostics(monkeypatch):
+    monkeypatch.setattr(telemetry, "_enabled", True)
     transaction = MagicMock()
     monkeypatch.setattr(
         telemetry.sentry_sdk,
@@ -54,3 +55,18 @@ def test_event_scrubber_removes_automatic_device_metadata():
             "decktation": {"preset": "wow"},
         }
     }
+
+
+def test_disabled_diagnostics_do_not_create_events_or_traces(monkeypatch):
+    monkeypatch.setattr(telemetry, "_enabled", False)
+    capture_message = MagicMock()
+    start_transaction = MagicMock()
+    monkeypatch.setattr(telemetry.sentry_sdk, "capture_message", capture_message)
+    monkeypatch.setattr(
+        telemetry.sentry_sdk, "start_transaction", start_transaction
+    )
+
+    assert telemetry.capture_error("test.failure") is None
+    assert telemetry.start_dictation_trace("wow", "steam_deck") is None
+    capture_message.assert_not_called()
+    start_transaction.assert_not_called()
