@@ -35,6 +35,21 @@ class FakeModel:
         return [SimpleNamespace(text="hello")], SimpleNamespace()
 
 
+class FakeWhisperCtor:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, model_size, device, compute_type):
+        self.calls.append(
+            {
+                "model_size": model_size,
+                "device": device,
+                "compute_type": compute_type,
+            }
+        )
+        return FakeModel()
+
+
 class FakeAudio(list):
     dtype = "float32"
 
@@ -105,3 +120,27 @@ def test_translate_mode_keeps_prompt_for_non_english_language(monkeypatch):
     assert service.model.kwargs["language"] == "fa"
     assert service.model.kwargs["task"] == "translate"
     assert service.model.kwargs["initial_prompt"] is not None
+
+
+def test_model_load_uses_selected_model_size(monkeypatch):
+    fake_ctor = FakeWhisperCtor()
+    monkeypatch.setattr(wow_voice_chat, "WhisperModel", fake_ctor)
+
+    service = WoWVoiceChat(lazy_load=True, model_size="small")
+
+    assert service._load_model() is True
+    assert fake_ctor.calls == [
+        {"model_size": "small", "device": "cpu", "compute_type": "int8"}
+    ]
+
+
+def test_set_model_size_reloads_loaded_model(monkeypatch):
+    fake_ctor = FakeWhisperCtor()
+    monkeypatch.setattr(wow_voice_chat, "WhisperModel", fake_ctor)
+
+    service = WoWVoiceChat(lazy_load=True, model_size="base")
+
+    assert service._load_model() is True
+    assert service.set_model_size("medium") is True
+
+    assert [call["model_size"] for call in fake_ctor.calls] == ["base", "medium"]

@@ -146,9 +146,12 @@ DEFAULT_BUTTON_CONFIG = {
     "confirmMode": False,
     "manualSend": False,
     "shareDiagnostics": False,
+    "modelSize": "base",
     "transcriptionLanguage": "auto",
     "translateToEnglish": False,
 }
+
+SUPPORTED_WHISPER_MODEL_SIZES = {"base", "small", "medium"}
 
 SUPPORTED_WHISPER_LANGUAGES = {
     "af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br",
@@ -173,6 +176,13 @@ def _normalize_transcription_language(language):
     return language
 
 
+def _normalize_model_size(model_size):
+    model_size = (model_size or "base").strip().lower()
+    if model_size not in SUPPORTED_WHISPER_MODEL_SIZES:
+        raise ValueError(f"Unsupported model size: {model_size}")
+    return model_size
+
+
 def _read_button_config():
     config = dict(DEFAULT_BUTTON_CONFIG)
     if os.path.exists(BUTTON_CONFIG_FILE):
@@ -184,6 +194,7 @@ def _read_button_config():
     config["transcriptionLanguage"] = _normalize_transcription_language(
         config.get("transcriptionLanguage")
     )
+    config["modelSize"] = _normalize_model_size(config.get("modelSize"))
     config["translateToEnglish"] = bool(config.get("translateToEnglish", False))
     return config
 
@@ -193,6 +204,9 @@ def _write_button_config(config):
     normalized_config.update(config)
     normalized_config["transcriptionLanguage"] = _normalize_transcription_language(
         normalized_config.get("transcriptionLanguage")
+    )
+    normalized_config["modelSize"] = _normalize_model_size(
+        normalized_config.get("modelSize")
     )
     normalized_config["translateToEnglish"] = bool(
         normalized_config.get("translateToEnglish", False)
@@ -536,6 +550,7 @@ class Plugin:
 
             confirm_mode = saved_config.get("confirmMode", False)
             manual_send = saved_config.get("manualSend", False)
+            model_size = saved_config.get("modelSize", "base")
             transcription_language = saved_config.get("transcriptionLanguage", "auto")
             translate_to_english = saved_config.get("translateToEnglish", False)
 
@@ -550,6 +565,7 @@ class Plugin:
                 preset=active_preset,
                 confirm_delay=2.0 if confirm_mode else 0,
                 manual_send=manual_send,
+                model_size=model_size,
                 transcription_language=(
                     None if transcription_language == "auto" else transcription_language
                 ),
@@ -766,6 +782,33 @@ class Plugin:
             }
         except Exception as e:
             logger.error(f"Error setting transcription options: {traceback.format_exc()}")
+            return {"success": False, "error": str(e)}
+
+    async def set_model_size(self, modelSize: str = "base"):
+        """Set the Faster Whisper model size and reload the model if needed."""
+        try:
+            model_size = _normalize_model_size(modelSize)
+            config = _read_button_config()
+            config["modelSize"] = model_size
+            _write_button_config(config)
+
+            reloaded = False
+            if Plugin.voice_service:
+                reloaded = Plugin.voice_service.model is not None
+                success = await asyncio.to_thread(
+                    Plugin.voice_service.set_model_size,
+                    model_size,
+                )
+                if not success:
+                    return {"success": False, "error": Plugin.voice_service.model_load_error}
+
+            logger.info(
+                f"Whisper model size updated: {model_size}"
+                f"{' (reloaded active model)' if reloaded else ''}"
+            )
+            return {"success": True, "modelSize": model_size, "reloaded": reloaded}
+        except Exception as e:
+            logger.error(f"Error setting model size: {traceback.format_exc()}")
             return {"success": False, "error": str(e)}
 
     async def get_presets(self):
