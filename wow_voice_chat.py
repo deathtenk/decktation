@@ -18,7 +18,7 @@ import wave
 
 
 class WoWVoiceChat:
-    def __init__(self, context_file="wow_context.json", sample_rate=44100, default_channel="say", lazy_load=False, test_mode=False, test_audio_file=None, preset=None, confirm_delay=0, manual_send=False, diagnostic_reporter=None):
+    def __init__(self, context_file="wow_context.json", sample_rate=44100, default_channel="say", lazy_load=False, test_mode=False, test_audio_file=None, preset=None, confirm_delay=0, manual_send=False, transcription_language=None, model_size="base", diagnostic_reporter=None):
         self.preset = preset or {}
         self.diagnostic_reporter = diagnostic_reporter
         self.context_file = Path(context_file)
@@ -27,6 +27,8 @@ class WoWVoiceChat:
         self.default_channel = self.preset.get("default_channel", default_channel)
         self.confirm_delay = confirm_delay  # seconds to wait before auto-sending (0 = disabled)
         self.manual_send = manual_send  # if True, skip final Enter press (user sends manually)
+        self.transcription_language = None if transcription_language in (None, "", "auto") else transcription_language
+        self.model_size = model_size
         self.pending_text = None
         self._pending_timer = None
         self._pending_lock = threading.Lock()
@@ -135,7 +137,7 @@ class WoWVoiceChat:
         self.model_loading = True
         try:
             print("Loading Whisper model...")
-            self.model = WhisperModel("base", device="cpu", compute_type="int8")
+            self.model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
             print("Model loaded!")
             self.model_load_error = None
             return True
@@ -163,6 +165,24 @@ class WoWVoiceChat:
         self.preset = preset
         self.default_channel = preset.get("default_channel", "say")
         self.channel_commands = preset.get("channels") or {"say": "", "type": ""}
+
+    def set_transcription_options(self, language=None):
+        """Update faster-whisper transcription options without reloading the model."""
+        self.transcription_language = language or None
+
+    def set_model_size(self, model_size):
+        """Update the selected model size and reload if a model is already active."""
+        if model_size == self.model_size:
+            return True
+
+        self.model_size = model_size
+        self.model_load_error = None
+
+        if self.model is None:
+            return True
+
+        self.model = None
+        return self._load_model()
 
     def _confirm_delay_for(self, text: str) -> float:
         """Calculate how long to wait based on text length: 3s base + 0.4s per word, max 6s."""
@@ -202,6 +222,12 @@ class WoWVoiceChat:
 
     def build_prompt_from_context(self):
         """Build initial_prompt and hotwords from context"""
+        # English game prompts bias non-English transcription heavily. When the
+        # user explicitly selects a non-English language, let Whisper work from
+        # the audio alone.
+        if self.transcription_language:
+            return None, None
+
         base_prompt = self.preset.get("whisper_prompt") if self.preset else None
 
         # Fall back to hardcoded WoW prompt when no preset is provided (direct CLI usage)
@@ -365,6 +391,8 @@ class WoWVoiceChat:
                 beam_size=5,
                 initial_prompt=initial_prompt,
                 hotwords=hotwords,
+                language=self.transcription_language,
+                task="transcribe",
                 vad_filter=True,
                 condition_on_previous_text=False,
             )

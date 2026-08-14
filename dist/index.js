@@ -133,6 +133,8 @@
     const setManualSendRpc = callable("set_manual_send");
     const setShareDiagnosticsRpc = callable("set_share_diagnostics");
     const setActivePresetRpc = callable("set_active_preset");
+    const setModelSizeRpc = callable("set_model_size");
+    const setTranscriptionOptionsRpc = callable("set_transcription_options");
     const setButtonConfig = callable("set_button_config");
     // Button IDs emitted by SteamClient.Input.RegisterForControllerInputMessages.
     // These match Steam's ControllerInputGamepadButton enum as observed by the
@@ -316,19 +318,132 @@
     }
     // Available button options
     const BUTTON_OPTIONS = [
-        { data: "L1", label: "L1 (Left Bumper)" },
-        { data: "R1", label: "R1 (Right Bumper)" },
-        { data: "L2", label: "L2 (Left Trigger)" },
-        { data: "R2", label: "R2 (Right Trigger)" },
-        { data: "L4", label: "L4 (Left Upper Grip)" },
-        { data: "R4", label: "R4 (Right Upper Grip)" },
-        { data: "L5", label: "L5 (Left Lower Grip)" },
-        { data: "R5", label: "R5 (Right Lower Grip)" },
-        { data: "A", label: "A Button" },
-        { data: "B", label: "B Button" },
-        { data: "X", label: "X Button" },
-        { data: "Y", label: "Y Button" },
+        { data: "L1", label: "L1 Bumper" },
+        { data: "R1", label: "R1 Bumper" },
+        { data: "L2", label: "L2 Trigger" },
+        { data: "R2", label: "R2 Trigger" },
+        { data: "L4", label: "L4 Grip" },
+        { data: "R4", label: "R4 Grip" },
+        { data: "L5", label: "L5 Grip" },
+        { data: "R5", label: "R5 Grip" },
+        { data: "A", label: "A" },
+        { data: "B", label: "B" },
+        { data: "X", label: "X" },
+        { data: "Y", label: "Y" },
     ];
+    const WHISPER_LANGUAGE_OPTIONS = [
+        { data: "auto", label: "Auto Detect" },
+        { data: "af", label: "Afrikaans" },
+        { data: "am", label: "Amharic" },
+        { data: "ar", label: "Arabic" },
+        { data: "as", label: "Assamese" },
+        { data: "az", label: "Azerbaijani" },
+        { data: "ba", label: "Bashkir" },
+        { data: "be", label: "Belarusian" },
+        { data: "bg", label: "Bulgarian" },
+        { data: "bn", label: "Bengali" },
+        { data: "bo", label: "Tibetan" },
+        { data: "br", label: "Breton" },
+        { data: "bs", label: "Bosnian" },
+        { data: "ca", label: "Catalan" },
+        { data: "cs", label: "Czech" },
+        { data: "cy", label: "Welsh" },
+        { data: "da", label: "Danish" },
+        { data: "de", label: "German" },
+        { data: "el", label: "Greek" },
+        { data: "en", label: "English" },
+        { data: "es", label: "Spanish" },
+        { data: "et", label: "Estonian" },
+        { data: "eu", label: "Basque" },
+        { data: "fa", label: "Persian" },
+        { data: "fi", label: "Finnish" },
+        { data: "fo", label: "Faroese" },
+        { data: "fr", label: "French" },
+        { data: "gl", label: "Galician" },
+        { data: "gu", label: "Gujarati" },
+        { data: "ha", label: "Hausa" },
+        { data: "haw", label: "Hawaiian" },
+        { data: "he", label: "Hebrew" },
+        { data: "hi", label: "Hindi" },
+        { data: "hr", label: "Croatian" },
+        { data: "ht", label: "Haitian Creole" },
+        { data: "hu", label: "Hungarian" },
+        { data: "hy", label: "Armenian" },
+        { data: "id", label: "Indonesian" },
+        { data: "is", label: "Icelandic" },
+        { data: "it", label: "Italian" },
+        { data: "ja", label: "Japanese" },
+        { data: "jw", label: "Javanese" },
+        { data: "ka", label: "Georgian" },
+        { data: "kk", label: "Kazakh" },
+        { data: "km", label: "Khmer" },
+        { data: "kn", label: "Kannada" },
+        { data: "ko", label: "Korean" },
+        { data: "la", label: "Latin" },
+        { data: "lb", label: "Luxembourgish" },
+        { data: "ln", label: "Lingala" },
+        { data: "lo", label: "Lao" },
+        { data: "lt", label: "Lithuanian" },
+        { data: "lv", label: "Latvian" },
+        { data: "mg", label: "Malagasy" },
+        { data: "mi", label: "Maori" },
+        { data: "mk", label: "Macedonian" },
+        { data: "ml", label: "Malayalam" },
+        { data: "mn", label: "Mongolian" },
+        { data: "mr", label: "Marathi" },
+        { data: "ms", label: "Malay" },
+        { data: "mt", label: "Maltese" },
+        { data: "my", label: "Myanmar" },
+        { data: "ne", label: "Nepali" },
+        { data: "nl", label: "Dutch" },
+        { data: "nn", label: "Norwegian Nynorsk" },
+        { data: "no", label: "Norwegian" },
+        { data: "oc", label: "Occitan" },
+        { data: "pa", label: "Punjabi" },
+        { data: "pl", label: "Polish" },
+        { data: "ps", label: "Pashto" },
+        { data: "pt", label: "Portuguese" },
+        { data: "ro", label: "Romanian" },
+        { data: "ru", label: "Russian" },
+        { data: "sa", label: "Sanskrit" },
+        { data: "sd", label: "Sindhi" },
+        { data: "si", label: "Sinhala" },
+        { data: "sk", label: "Slovak" },
+        { data: "sl", label: "Slovenian" },
+        { data: "sn", label: "Shona" },
+        { data: "so", label: "Somali" },
+        { data: "sq", label: "Albanian" },
+        { data: "sr", label: "Serbian" },
+        { data: "su", label: "Sundanese" },
+        { data: "sv", label: "Swedish" },
+        { data: "sw", label: "Swahili" },
+        { data: "ta", label: "Tamil" },
+        { data: "te", label: "Telugu" },
+        { data: "tg", label: "Tajik" },
+        { data: "th", label: "Thai" },
+        { data: "tk", label: "Turkmen" },
+        { data: "tl", label: "Tagalog" },
+        { data: "tr", label: "Turkish" },
+        { data: "tt", label: "Tatar" },
+        { data: "uk", label: "Ukrainian" },
+        { data: "ur", label: "Urdu" },
+        { data: "uz", label: "Uzbek" },
+        { data: "vi", label: "Vietnamese" },
+        { data: "yi", label: "Yiddish" },
+        { data: "yo", label: "Yoruba" },
+        { data: "yue", label: "Cantonese" },
+        { data: "zh", label: "Chinese" },
+    ];
+    const MODEL_SIZE_OPTIONS = [
+        { data: "base", label: "Base" },
+        { data: "small", label: "Small" },
+        { data: "medium", label: "Medium" },
+    ];
+    const PRESET_DISPLAY_NAMES = {
+        wow: "WoW",
+        guildwars2: "GW2",
+        generic: "Generic",
+    };
     const DecktationPanel = ({ logic }) => {
         const [enabled, setEnabled] = React.useState(false);
         const [recording, setRecording] = React.useState(false);
@@ -344,6 +459,8 @@
         const [confirmMode, setConfirmMode] = React.useState(false);
         const [manualSend, setManualSend] = React.useState(false);
         const [shareDiagnostics, setShareDiagnostics] = React.useState(false);
+        const [modelSize, setModelSize] = React.useState("base");
+        const [transcriptionLanguage, setTranscriptionLanguage] = React.useState("auto");
         const [lastTranscription, setLastTranscription] = React.useState("");
         const [lastTranscriptionTime, setLastTranscriptionTime] = React.useState("");
         const [rpcError, setRpcError] = React.useState("");
@@ -377,6 +494,12 @@
                         if (config.shareDiagnostics !== undefined) {
                             setShareDiagnostics(config.shareDiagnostics);
                         }
+                        if (config.modelSize) {
+                            setModelSize(config.modelSize);
+                        }
+                        if (config.transcriptionLanguage) {
+                            setTranscriptionLanguage(config.transcriptionLanguage);
+                        }
                         // Restore enabled state
                         if (config.enabled) {
                             setEnabled(true);
@@ -392,7 +515,7 @@
                 if (result.success) {
                     const opts = result.presets.map((p) => ({
                         data: p.id,
-                        label: p.name,
+                        label: PRESET_DISPLAY_NAMES[p.id] || p.name,
                     }));
                     setPresets(opts);
                 }
@@ -437,7 +560,7 @@
             };
         }, [logic.enabled]);
         return (React__default["default"].createElement("div", null,
-            React__default["default"].createElement(deckyFrontendLib.PanelSection, null,
+            React__default["default"].createElement(deckyFrontendLib.PanelSection, { title: "Status" },
                 !serviceReady && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement("div", { style: {
                             padding: '10px',
@@ -463,7 +586,7 @@
                             fontWeight: 'bold'
                         } }, "Keyboard helper unavailable. Reload the plugin or reinstall Decktation."))),
                 React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Enable Dictation", checked: enabled, disabled: !serviceReady || modelLoading, onChange: async (e) => {
+                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Enable", checked: enabled, disabled: !serviceReady || modelLoading, onChange: async (e) => {
                             setEnabled(e);
                             logic.enabled = e;
                             await setEnabledRpc(e);
@@ -477,106 +600,6 @@
                                 setRecording(false);
                             }
                         } })),
-                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Show Notifications", description: "Show toast when recording starts/stops", checked: showNotifications, onChange: async (e) => {
-                            setShowNotifications(e);
-                            logic.showNotifications = e;
-                            if (!e && confirmMode) {
-                                setConfirmMode(false);
-                                await setConfirmModeRpc(false);
-                            }
-                            await setButtonConfig(buttons, e);
-                        } })),
-                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Confirm Before Sending", description: "Waits before typing (longer for more words) \u2014 hold the buttons again to cancel", checked: confirmMode, onChange: async (e) => {
-                            setConfirmMode(e);
-                            await setConfirmModeRpc(e);
-                        } })),
-                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Manual Send", description: "Type text into chat but let you press Enter to send", checked: manualSend, onChange: async (e) => {
-                            setManualSend(e);
-                            await setManualSendRpc(e);
-                        } })),
-                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Share Anonymous Diagnostics", description: "Share privacy-scrubbed errors and performance data to help improve Decktation", checked: shareDiagnostics, onChange: async (e) => {
-                            setShareDiagnostics(e);
-                            const result = await setShareDiagnosticsRpc(e);
-                            if (!result.success) {
-                                setShareDiagnostics(!e);
-                                setRpcError(result.error || "Could not update diagnostics setting");
-                            }
-                        } })),
-                presets.length > 0 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: "Game", menuLabel: "Select Game", rgOptions: presets, selectedOption: activePreset, onChange: async (option) => {
-                            const game = option.data;
-                            setActivePreset(game);
-                            await setActivePresetRpc(game);
-                        } }))),
-                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement("div", { style: {
-                            padding: '10px',
-                            backgroundColor: '#2a2a2a',
-                            borderRadius: '6px',
-                            fontSize: '13px',
-                            textAlign: 'center',
-                            border: '1px solid #444',
-                            marginBottom: '8px'
-                        } },
-                        "Hold ",
-                        React__default["default"].createElement("strong", null, buttons.join('+')),
-                        " to record")),
-                buttons.map((button, index) => (React__default["default"].createElement("div", { key: index },
-                    React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                        React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: `Button ${index + 1}`, menuLabel: `Select Button ${index + 1}`, rgOptions: BUTTON_OPTIONS, selectedOption: button, onChange: async (option) => {
-                                const newButtons = [...buttons];
-                                newButtons[index] = option.data;
-                                setButtons(newButtons);
-                                await setButtonConfig(newButtons, showNotifications);
-                            } })),
-                    buttons.length > 1 && (React__default["default"].createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', paddingRight: '16px' } },
-                        React__default["default"].createElement("div", { onClick: async () => {
-                                const newButtons = buttons.filter((_, i) => i !== index);
-                                setButtons(newButtons);
-                                await setButtonConfig(newButtons, showNotifications);
-                            }, style: {
-                                color: '#e05f5f',
-                                cursor: 'pointer',
-                                padding: '5px 8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                backgroundColor: 'rgba(224, 95, 95, 0.12)',
-                                borderRadius: '4px',
-                                textDecoration: 'none',
-                                userSelect: 'none',
-                            } },
-                            React__default["default"].createElement(FaTrash, { size: 13 }),
-                            React__default["default"].createElement("span", { style: { fontSize: '12px', textDecoration: 'none' } }, "Remove"))))))),
-                buttons.length < 5 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement("div", { style: { marginTop: '8px' } },
-                        React__default["default"].createElement(deckyFrontendLib.ButtonItem, { layout: "below", onClick: async () => {
-                                // Find first button not in current list
-                                const availableButton = BUTTON_OPTIONS.find(opt => !buttons.includes(opt.data));
-                                if (availableButton) {
-                                    const newButtons = [...buttons, availableButton.data];
-                                    setButtons(newButtons);
-                                    await setButtonConfig(newButtons, showNotifications);
-                                }
-                            } }, "\u2795 Add Button")))),
-                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
-                    React__default["default"].createElement("div", { style: {
-                            padding: '8px',
-                            backgroundColor: logic.inputRegistered ? '#1a3a1a' : '#3a1a1a',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            textAlign: 'center',
-                            fontFamily: 'monospace'
-                        } },
-                        "Input: ",
-                        logic.inputRegistered ? "OK" : "FAILED",
-                        React__default["default"].createElement("br", null),
-                        "Button: ",
-                        React__default["default"].createElement("strong", null, buttonState))),
                 enabled && modelReady && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement("div", { style: {
                             padding: '12px',
@@ -630,6 +653,142 @@
                                 color: '#888',
                                 textAlign: 'right'
                             } }, lastTranscriptionTime))))),
+            React__default["default"].createElement(deckyFrontendLib.PanelSection, { title: "Transcription" },
+                presets.length > 0 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: "Game", menuLabel: "Game", rgOptions: presets, selectedOption: activePreset, onChange: async (option) => {
+                            const game = option.data;
+                            setActivePreset(game);
+                            await setActivePresetRpc(game);
+                        } }))),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: "Model", menuLabel: "Model", rgOptions: MODEL_SIZE_OPTIONS, selectedOption: modelSize, onChange: async (option) => {
+                            const nextModelSize = option.data;
+                            const previousModelSize = modelSize;
+                            setModelSize(nextModelSize);
+                            if (enabled && modelReady) {
+                                setModelLoading(true);
+                            }
+                            const result = await setModelSizeRpc(nextModelSize);
+                            if (!result.success) {
+                                setModelSize(previousModelSize);
+                                setModelLoading(false);
+                                setRpcError(result.error || "Could not update model size");
+                            }
+                        } })),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement("div", { style: {
+                            padding: '10px',
+                            backgroundColor: '#2a2a2a',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            lineHeight: '1.5',
+                            border: '1px solid #444',
+                        } }, "Base is fastest. Small is the balanced choice. Medium is more accurate but slower and may download on first use.")),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: "Lang", menuLabel: "Language", rgOptions: WHISPER_LANGUAGE_OPTIONS, selectedOption: transcriptionLanguage, onChange: async (option) => {
+                            const language = option.data;
+                            setTranscriptionLanguage(language);
+                            const result = await setTranscriptionOptionsRpc(language);
+                            if (!result.success) {
+                                setRpcError(result.error || "Could not update language setting");
+                            }
+                        } }))),
+            React__default["default"].createElement(deckyFrontendLib.PanelSection, { title: "Input" },
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Toasts", description: "Recording alerts", checked: showNotifications, onChange: async (e) => {
+                            setShowNotifications(e);
+                            logic.showNotifications = e;
+                            if (!e && confirmMode) {
+                                setConfirmMode(false);
+                                await setConfirmModeRpc(false);
+                            }
+                            await setButtonConfig(buttons, e);
+                        } })),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Confirm", description: "Delay before send", checked: confirmMode, onChange: async (e) => {
+                            setConfirmMode(e);
+                            await setConfirmModeRpc(e);
+                        } })),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Manual", description: "You press Enter", checked: manualSend, onChange: async (e) => {
+                            setManualSend(e);
+                            await setManualSendRpc(e);
+                        } })),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement("div", { style: {
+                            padding: '10px',
+                            backgroundColor: '#2a2a2a',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            textAlign: 'center',
+                            border: '1px solid #444',
+                            marginBottom: '8px'
+                        } },
+                        "Hold ",
+                        React__default["default"].createElement("strong", null, buttons.join('+')),
+                        " to record")),
+                buttons.map((button, index) => (React__default["default"].createElement("div", { key: index },
+                    React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                        React__default["default"].createElement(deckyFrontendLib.DropdownItem, { label: `Button ${index + 1}`, menuLabel: `Button ${index + 1}`, rgOptions: BUTTON_OPTIONS, selectedOption: button, onChange: async (option) => {
+                                const newButtons = [...buttons];
+                                newButtons[index] = option.data;
+                                setButtons(newButtons);
+                                await setButtonConfig(newButtons, showNotifications);
+                            } })),
+                    buttons.length > 1 && (React__default["default"].createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', paddingRight: '16px' } },
+                        React__default["default"].createElement("div", { onClick: async () => {
+                                const newButtons = buttons.filter((_, i) => i !== index);
+                                setButtons(newButtons);
+                                await setButtonConfig(newButtons, showNotifications);
+                            }, style: {
+                                color: '#e05f5f',
+                                cursor: 'pointer',
+                                padding: '5px 8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: 'rgba(224, 95, 95, 0.12)',
+                                borderRadius: '4px',
+                                textDecoration: 'none',
+                                userSelect: 'none',
+                            } },
+                            React__default["default"].createElement(FaTrash, { size: 13 }),
+                            React__default["default"].createElement("span", { style: { fontSize: '12px', textDecoration: 'none' } }, "Remove"))))))),
+                buttons.length < 5 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement("div", { style: { marginTop: '8px' } },
+                        React__default["default"].createElement(deckyFrontendLib.ButtonItem, { layout: "below", onClick: async () => {
+                                // Find first button not in current list
+                                const availableButton = BUTTON_OPTIONS.find(opt => !buttons.includes(opt.data));
+                                if (availableButton) {
+                                    const newButtons = [...buttons, availableButton.data];
+                                    setButtons(newButtons);
+                                    await setButtonConfig(newButtons, showNotifications);
+                                }
+                            } }, "Add Button")))),
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement("div", { style: {
+                            padding: '8px',
+                            backgroundColor: logic.inputRegistered ? '#1a3a1a' : '#3a1a1a',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            textAlign: 'center',
+                            fontFamily: 'monospace'
+                        } },
+                        "Input: ",
+                        logic.inputRegistered ? "OK" : "FAILED",
+                        React__default["default"].createElement("br", null),
+                        "Button: ",
+                        React__default["default"].createElement("strong", null, buttonState)))),
+            React__default["default"].createElement(deckyFrontendLib.PanelSection, { title: "Diagnostics" },
+                React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                    React__default["default"].createElement(deckyFrontendLib.ToggleField, { label: "Share", description: "Anonymous diagnostics", checked: shareDiagnostics, onChange: async (e) => {
+                            setShareDiagnostics(e);
+                            const result = await setShareDiagnosticsRpc(e);
+                            if (!result.success) {
+                                setShareDiagnostics(!e);
+                                setRpcError(result.error || "Could not update diagnostics setting");
+                            }
+                        } }))),
             React__default["default"].createElement(deckyFrontendLib.PanelSection, { title: "How to use:" },
                 React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement(deckyFrontendLib.Focusable, { tabIndex: 0, role: "region", "aria-label": "How to use Decktation", onActivate: () => { }, focusWithinClassName: "gpfocuswithin", style: { fontSize: '13px', lineHeight: '1.6' } },
