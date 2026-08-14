@@ -209,6 +209,12 @@ class WoWVoiceChat:
 
     def build_prompt_from_context(self):
         """Build initial_prompt and hotwords from context"""
+        # English game prompts bias non-English transcription heavily. When the
+        # user explicitly selects a non-English language, let Whisper work from
+        # the audio alone unless they are using translation mode.
+        if self.transcription_language and not self.translate_to_english:
+            return None, None
+
         base_prompt = self.preset.get("whisper_prompt") if self.preset else None
 
         # Fall back to hardcoded WoW prompt when no preset is provided (direct CLI usage)
