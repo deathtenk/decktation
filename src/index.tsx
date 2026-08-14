@@ -35,6 +35,10 @@ const setConfirmModeRpc = callable<[enabled: boolean], RpcResponse>("set_confirm
 const setManualSendRpc = callable<[enabled: boolean], RpcResponse>("set_manual_send");
 const setShareDiagnosticsRpc = callable<[enabled: boolean], RpcResponse>("set_share_diagnostics");
 const setActivePresetRpc = callable<[game: string], RpcResponse>("set_active_preset");
+const setTranscriptionOptionsRpc = callable<
+	[language: string, translateToEnglish: boolean],
+	RpcResponse
+>("set_transcription_options");
 const setButtonConfig = callable<
 	[buttons: string[], showNotifications: boolean],
 	RpcResponse
@@ -246,6 +250,110 @@ const BUTTON_OPTIONS: DropdownOption[] = [
 	{ data: "Y", label: "Y Button" },
 ];
 
+const WHISPER_LANGUAGE_OPTIONS: DropdownOption[] = [
+	{ data: "auto", label: "Auto Detect" },
+	{ data: "af", label: "Afrikaans" },
+	{ data: "am", label: "Amharic" },
+	{ data: "ar", label: "Arabic" },
+	{ data: "as", label: "Assamese" },
+	{ data: "az", label: "Azerbaijani" },
+	{ data: "ba", label: "Bashkir" },
+	{ data: "be", label: "Belarusian" },
+	{ data: "bg", label: "Bulgarian" },
+	{ data: "bn", label: "Bengali" },
+	{ data: "bo", label: "Tibetan" },
+	{ data: "br", label: "Breton" },
+	{ data: "bs", label: "Bosnian" },
+	{ data: "ca", label: "Catalan" },
+	{ data: "cs", label: "Czech" },
+	{ data: "cy", label: "Welsh" },
+	{ data: "da", label: "Danish" },
+	{ data: "de", label: "German" },
+	{ data: "el", label: "Greek" },
+	{ data: "en", label: "English" },
+	{ data: "es", label: "Spanish" },
+	{ data: "et", label: "Estonian" },
+	{ data: "eu", label: "Basque" },
+	{ data: "fa", label: "Persian" },
+	{ data: "fi", label: "Finnish" },
+	{ data: "fo", label: "Faroese" },
+	{ data: "fr", label: "French" },
+	{ data: "gl", label: "Galician" },
+	{ data: "gu", label: "Gujarati" },
+	{ data: "ha", label: "Hausa" },
+	{ data: "haw", label: "Hawaiian" },
+	{ data: "he", label: "Hebrew" },
+	{ data: "hi", label: "Hindi" },
+	{ data: "hr", label: "Croatian" },
+	{ data: "ht", label: "Haitian Creole" },
+	{ data: "hu", label: "Hungarian" },
+	{ data: "hy", label: "Armenian" },
+	{ data: "id", label: "Indonesian" },
+	{ data: "is", label: "Icelandic" },
+	{ data: "it", label: "Italian" },
+	{ data: "ja", label: "Japanese" },
+	{ data: "jw", label: "Javanese" },
+	{ data: "ka", label: "Georgian" },
+	{ data: "kk", label: "Kazakh" },
+	{ data: "km", label: "Khmer" },
+	{ data: "kn", label: "Kannada" },
+	{ data: "ko", label: "Korean" },
+	{ data: "la", label: "Latin" },
+	{ data: "lb", label: "Luxembourgish" },
+	{ data: "ln", label: "Lingala" },
+	{ data: "lo", label: "Lao" },
+	{ data: "lt", label: "Lithuanian" },
+	{ data: "lv", label: "Latvian" },
+	{ data: "mg", label: "Malagasy" },
+	{ data: "mi", label: "Maori" },
+	{ data: "mk", label: "Macedonian" },
+	{ data: "ml", label: "Malayalam" },
+	{ data: "mn", label: "Mongolian" },
+	{ data: "mr", label: "Marathi" },
+	{ data: "ms", label: "Malay" },
+	{ data: "mt", label: "Maltese" },
+	{ data: "my", label: "Myanmar" },
+	{ data: "ne", label: "Nepali" },
+	{ data: "nl", label: "Dutch" },
+	{ data: "nn", label: "Norwegian Nynorsk" },
+	{ data: "no", label: "Norwegian" },
+	{ data: "oc", label: "Occitan" },
+	{ data: "pa", label: "Punjabi" },
+	{ data: "pl", label: "Polish" },
+	{ data: "ps", label: "Pashto" },
+	{ data: "pt", label: "Portuguese" },
+	{ data: "ro", label: "Romanian" },
+	{ data: "ru", label: "Russian" },
+	{ data: "sa", label: "Sanskrit" },
+	{ data: "sd", label: "Sindhi" },
+	{ data: "si", label: "Sinhala" },
+	{ data: "sk", label: "Slovak" },
+	{ data: "sl", label: "Slovenian" },
+	{ data: "sn", label: "Shona" },
+	{ data: "so", label: "Somali" },
+	{ data: "sq", label: "Albanian" },
+	{ data: "sr", label: "Serbian" },
+	{ data: "su", label: "Sundanese" },
+	{ data: "sv", label: "Swedish" },
+	{ data: "sw", label: "Swahili" },
+	{ data: "ta", label: "Tamil" },
+	{ data: "te", label: "Telugu" },
+	{ data: "tg", label: "Tajik" },
+	{ data: "th", label: "Thai" },
+	{ data: "tk", label: "Turkmen" },
+	{ data: "tl", label: "Tagalog" },
+	{ data: "tr", label: "Turkish" },
+	{ data: "tt", label: "Tatar" },
+	{ data: "uk", label: "Ukrainian" },
+	{ data: "ur", label: "Urdu" },
+	{ data: "uz", label: "Uzbek" },
+	{ data: "vi", label: "Vietnamese" },
+	{ data: "yi", label: "Yiddish" },
+	{ data: "yo", label: "Yoruba" },
+	{ data: "yue", label: "Cantonese" },
+	{ data: "zh", label: "Chinese" },
+];
+
 const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 	const [enabled, setEnabled] = useState<boolean>(false);
 	const [recording, setRecording] = useState<boolean>(false);
@@ -261,6 +369,8 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 	const [confirmMode, setConfirmMode] = useState<boolean>(false);
 	const [manualSend, setManualSend] = useState<boolean>(false);
 	const [shareDiagnostics, setShareDiagnostics] = useState<boolean>(false);
+	const [transcriptionLanguage, setTranscriptionLanguage] = useState<string>("auto");
+	const [translateToEnglish, setTranslateToEnglish] = useState<boolean>(false);
 	const [lastTranscription, setLastTranscription] = useState<string>("");
 	const [lastTranscriptionTime, setLastTranscriptionTime] = useState<string>("");
 	const [rpcError, setRpcError] = useState<string>("");
@@ -295,6 +405,12 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 					}
 					if (config.shareDiagnostics !== undefined) {
 						setShareDiagnostics(config.shareDiagnostics);
+					}
+					if (config.transcriptionLanguage) {
+						setTranscriptionLanguage(config.transcriptionLanguage);
+					}
+					if (config.translateToEnglish !== undefined) {
+						setTranslateToEnglish(config.translateToEnglish);
 					}
 					// Restore enabled state
 					if (config.enabled) {
@@ -490,6 +606,39 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						/>
 					</PanelSectionRow>
 				)}
+
+				<PanelSectionRow>
+					<DropdownItem
+						label="Language"
+						menuLabel="Transcription Language"
+						rgOptions={WHISPER_LANGUAGE_OPTIONS}
+						selectedOption={transcriptionLanguage}
+						onChange={async (option) => {
+							const language = option.data as string;
+							setTranscriptionLanguage(language);
+							const result = await setTranscriptionOptionsRpc(language, translateToEnglish);
+							if (!result.success) {
+								setRpcError(result.error || "Could not update language setting");
+							}
+						}}
+					/>
+				</PanelSectionRow>
+
+				<PanelSectionRow>
+					<ToggleField
+						label="Translate to English"
+						description="Transcribe non-English speech as English text"
+						checked={translateToEnglish}
+						onChange={async (e) => {
+							setTranslateToEnglish(e);
+							const result = await setTranscriptionOptionsRpc(transcriptionLanguage, e);
+							if (!result.success) {
+								setTranslateToEnglish(!e);
+								setRpcError(result.error || "Could not update translation setting");
+							}
+						}}
+					/>
+				</PanelSectionRow>
 
 				<PanelSectionRow>
 					<div style={{

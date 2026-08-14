@@ -138,6 +138,69 @@ if not os.path.exists(PRESETS_FILE):
     # Keep source-tree execution useful for tests and local development.
     PRESETS_FILE = os.path.join(plugin_path, "defaults", "game_presets.json")
 
+DEFAULT_BUTTON_CONFIG = {
+    "buttons": ["L1", "R1"],
+    "showNotifications": True,
+    "enabled": False,
+    "game": "wow",
+    "confirmMode": False,
+    "manualSend": False,
+    "shareDiagnostics": False,
+    "transcriptionLanguage": "auto",
+    "translateToEnglish": False,
+}
+
+SUPPORTED_WHISPER_LANGUAGES = {
+    "af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br",
+    "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu",
+    "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr",
+    "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km",
+    "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk",
+    "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc",
+    "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl",
+    "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th",
+    "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue",
+    "zh",
+}
+
+
+def _normalize_transcription_language(language):
+    language = (language or "auto").strip().lower()
+    if language in ("", "auto"):
+        return "auto"
+    if language not in SUPPORTED_WHISPER_LANGUAGES:
+        raise ValueError(f"Unsupported transcription language: {language}")
+    return language
+
+
+def _read_button_config():
+    config = dict(DEFAULT_BUTTON_CONFIG)
+    if os.path.exists(BUTTON_CONFIG_FILE):
+        with open(BUTTON_CONFIG_FILE, "r") as config_file:
+            saved_config = json.load(config_file)
+        if isinstance(saved_config, dict):
+            config.update(saved_config)
+
+    config["transcriptionLanguage"] = _normalize_transcription_language(
+        config.get("transcriptionLanguage")
+    )
+    config["translateToEnglish"] = bool(config.get("translateToEnglish", False))
+    return config
+
+
+def _write_button_config(config):
+    normalized_config = dict(DEFAULT_BUTTON_CONFIG)
+    normalized_config.update(config)
+    normalized_config["transcriptionLanguage"] = _normalize_transcription_language(
+        normalized_config.get("transcriptionLanguage")
+    )
+    normalized_config["translateToEnglish"] = bool(
+        normalized_config.get("translateToEnglish", False)
+    )
+    with open(BUTTON_CONFIG_FILE, "w") as config_file:
+        json.dump(normalized_config, config_file)
+    return normalized_config
+
 # Load game presets
 _game_presets = {}
 try:
@@ -459,30 +522,22 @@ class Plugin:
                 logger.error("WoWVoiceChat not available - dependencies may be missing")
                 return
 
-            # Load active game preset
-            active_game = "wow"
+            # Load persisted settings
+            saved_config = dict(DEFAULT_BUTTON_CONFIG)
             try:
-                if os.path.exists(BUTTON_CONFIG_FILE):
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        saved_config = json.load(f)
-                    active_game = saved_config.get("game", "wow")
+                saved_config = _read_button_config()
             except Exception as e:
-                logger.error(f"Error reading active game from config: {e}")
+                logger.error(f"Error reading settings from config: {e}")
 
+            active_game = saved_config.get("game", "wow")
             active_preset = _game_presets.get(active_game, _game_presets.get("wow", {}))
             Plugin.active_preset = active_game
             logger.info(f"Active game preset: {active_game}")
 
-            confirm_mode = False
-            manual_send = False
-            try:
-                if os.path.exists(BUTTON_CONFIG_FILE):
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        saved_config = json.load(f)
-                    confirm_mode = saved_config.get("confirmMode", False)
-                    manual_send = saved_config.get("manualSend", False)
-            except Exception as e:
-                logger.error(f"Error reading confirm/manual send mode from config: {e}")
+            confirm_mode = saved_config.get("confirmMode", False)
+            manual_send = saved_config.get("manualSend", False)
+            transcription_language = saved_config.get("transcriptionLanguage", "auto")
+            translate_to_english = saved_config.get("translateToEnglish", False)
 
             # Initialize the voice service with lazy model loading
             context_file = f"{plugin_path}/wow_context.json"
@@ -495,6 +550,10 @@ class Plugin:
                 preset=active_preset,
                 confirm_delay=2.0 if confirm_mode else 0,
                 manual_send=manual_send,
+                transcription_language=(
+                    None if transcription_language == "auto" else transcription_language
+                ),
+                translate_to_english=translate_to_english,
                 diagnostic_reporter=lambda name, error=None: (
                     telemetry_capture_error(
                         name,
@@ -512,8 +571,6 @@ class Plugin:
             # Restore enabled state from config
             try:
                 if os.path.exists(BUTTON_CONFIG_FILE):
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        saved_config = json.load(f)
                     Plugin.controller_enabled = saved_config.get("enabled", False)
                     if Plugin.controller_enabled:
                         logger.info("Restored enabled state from config")
@@ -581,13 +638,9 @@ class Plugin:
         logger.info(f"Controller listening {'enabled' if enabled else 'disabled'}")
         # Persist enabled state to config
         try:
-            config = {"buttons": ["L1", "R1"], "showNotifications": True}
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                with open(BUTTON_CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
+            config = _read_button_config()
             config["enabled"] = enabled
-            with open(BUTTON_CONFIG_FILE, 'w') as f:
-                json.dump(config, f)
+            _write_button_config(config)
         except Exception as e:
             logger.error(f"Error saving enabled state: {e}")
         return {"success": True}
@@ -595,26 +648,7 @@ class Plugin:
     async def get_button_config(self):
         """Get current button configuration and settings"""
         try:
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                with open(BUTTON_CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    # Ensure fields exist for backward compatibility
-                    if "showNotifications" not in config:
-                        config["showNotifications"] = True
-                    if "enabled" not in config:
-                        config["enabled"] = False
-                    if "game" not in config:
-                        config["game"] = "wow"
-                    if "confirmMode" not in config:
-                        config["confirmMode"] = False
-                    if "manualSend" not in config:
-                        config["manualSend"] = False
-                    if "shareDiagnostics" not in config:
-                        config["shareDiagnostics"] = False
-                    return {"success": True, "config": config}
-            else:
-                # Default: L1+R1, notifications enabled, not enabled, wow preset, no confirm, auto send
-                return {"success": True, "config": {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow", "confirmMode": False, "manualSend": False, "shareDiagnostics": False}}
+            return {"success": True, "config": _read_button_config()}
         except Exception as e:
             logger.error(f"Error getting button config: {traceback.format_exc()}")
             return {"success": False, "error": str(e)}
@@ -623,18 +657,9 @@ class Plugin:
         """Persist and immediately apply anonymous diagnostics consent."""
         global telemetry
         try:
-            config = {
-                "buttons": ["L1", "R1"],
-                "showNotifications": True,
-                "enabled": False,
-                "game": "wow",
-            }
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                with open(BUTTON_CONFIG_FILE, "r") as config_file:
-                    config = json.load(config_file)
+            config = _read_button_config()
             config["shareDiagnostics"] = bool(enabled)
-            with open(BUTTON_CONFIG_FILE, "w") as config_file:
-                json.dump(config, config_file)
+            _write_button_config(config)
 
             telemetry = bool(enabled) and telemetry_available
             if telemetry_available:
@@ -663,20 +688,12 @@ class Plugin:
                     seen.add(btn)
                     unique_buttons.append(btn)
 
-            # Preserve existing fields (game, enabled) when updating button config
-            config = {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow"}
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                try:
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        config = json.load(f)
-                except Exception:
-                    pass
+            config = _read_button_config()
 
             config["buttons"] = unique_buttons
             config["showNotifications"] = showNotifications
 
-            with open(BUTTON_CONFIG_FILE, 'w') as f:
-                json.dump(config, f)
+            _write_button_config(config)
 
             combo_str = "+".join(unique_buttons)
             logger.info(f"Button config updated: {combo_str}, notifications: {showNotifications}")
@@ -693,16 +710,9 @@ class Plugin:
     async def set_confirm_mode(self, enabled: bool):
         """Enable or disable the confirm-before-sending delay"""
         try:
-            config = {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow", "confirmMode": False, "manualSend": False}
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                try:
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        config = json.load(f)
-                except Exception:
-                    pass
+            config = _read_button_config()
             config["confirmMode"] = enabled
-            with open(BUTTON_CONFIG_FILE, 'w') as f:
-                json.dump(config, f)
+            _write_button_config(config)
 
             if Plugin.voice_service:
                 Plugin.voice_service.confirm_delay = 2.0 if enabled else 0
@@ -716,16 +726,9 @@ class Plugin:
     async def set_manual_send(self, enabled: bool):
         """Enable or disable manual send mode (skip final Enter press)"""
         try:
-            config = {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow", "confirmMode": False, "manualSend": False}
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                try:
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        config = json.load(f)
-                except Exception:
-                    pass
+            config = _read_button_config()
             config["manualSend"] = enabled
-            with open(BUTTON_CONFIG_FILE, 'w') as f:
-                json.dump(config, f)
+            _write_button_config(config)
 
             if Plugin.voice_service:
                 Plugin.voice_service.manual_send = enabled
@@ -734,6 +737,35 @@ class Plugin:
             return {"success": True}
         except Exception as e:
             logger.error(f"Error setting manual send mode: {traceback.format_exc()}")
+            return {"success": False, "error": str(e)}
+
+    async def set_transcription_options(self, language: str = "auto", translateToEnglish: bool = False):
+        """Set faster-whisper language selection and translation behavior."""
+        try:
+            language = _normalize_transcription_language(language)
+            translate_to_english = bool(translateToEnglish)
+            config = _read_button_config()
+            config["transcriptionLanguage"] = language
+            config["translateToEnglish"] = translate_to_english
+            _write_button_config(config)
+
+            if Plugin.voice_service:
+                Plugin.voice_service.set_transcription_options(
+                    None if language == "auto" else language,
+                    translate_to_english,
+                )
+
+            logger.info(
+                "Transcription options updated: "
+                f"language={language}, translate_to_english={translate_to_english}"
+            )
+            return {
+                "success": True,
+                "language": language,
+                "translateToEnglish": translate_to_english,
+            }
+        except Exception as e:
+            logger.error(f"Error setting transcription options: {traceback.format_exc()}")
             return {"success": False, "error": str(e)}
 
     async def get_presets(self):
@@ -748,11 +780,8 @@ class Plugin:
     async def get_active_preset(self):
         """Get the currently active game preset id"""
         try:
-            game = "wow"
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                with open(BUTTON_CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                game = config.get("game", "wow")
+            config = _read_button_config()
+            game = config.get("game", "wow")
             return {"success": True, "game": game}
         except Exception as e:
             logger.error(f"Error getting active preset: {traceback.format_exc()}")
@@ -764,17 +793,9 @@ class Plugin:
             if game not in _game_presets:
                 return {"success": False, "error": f"Unknown preset: {game}"}
 
-            # Save to config
-            config = {"buttons": ["L1", "R1"], "showNotifications": True, "enabled": False, "game": "wow"}
-            if os.path.exists(BUTTON_CONFIG_FILE):
-                try:
-                    with open(BUTTON_CONFIG_FILE, 'r') as f:
-                        config = json.load(f)
-                except Exception:
-                    pass
+            config = _read_button_config()
             config["game"] = game
-            with open(BUTTON_CONFIG_FILE, 'w') as f:
-                json.dump(config, f)
+            _write_button_config(config)
 
             # Update running voice service
             if Plugin.voice_service:
