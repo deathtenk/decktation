@@ -148,7 +148,6 @@ DEFAULT_BUTTON_CONFIG = {
     "shareDiagnostics": False,
     "modelSize": "base",
     "transcriptionLanguage": "auto",
-    "translateToEnglish": False,
 }
 
 SUPPORTED_WHISPER_MODEL_SIZES = {"base", "small", "medium"}
@@ -195,7 +194,7 @@ def _read_button_config():
         config.get("transcriptionLanguage")
     )
     config["modelSize"] = _normalize_model_size(config.get("modelSize"))
-    config["translateToEnglish"] = bool(config.get("translateToEnglish", False))
+    config["translateToEnglish"] = False
     return config
 
 
@@ -208,9 +207,7 @@ def _write_button_config(config):
     normalized_config["modelSize"] = _normalize_model_size(
         normalized_config.get("modelSize")
     )
-    normalized_config["translateToEnglish"] = bool(
-        normalized_config.get("translateToEnglish", False)
-    )
+    normalized_config["translateToEnglish"] = False
     with open(BUTTON_CONFIG_FILE, "w") as config_file:
         json.dump(normalized_config, config_file)
     return normalized_config
@@ -552,7 +549,6 @@ class Plugin:
             manual_send = saved_config.get("manualSend", False)
             model_size = saved_config.get("modelSize", "base")
             transcription_language = saved_config.get("transcriptionLanguage", "auto")
-            translate_to_english = saved_config.get("translateToEnglish", False)
 
             # Initialize the voice service with lazy model loading
             context_file = f"{plugin_path}/wow_context.json"
@@ -569,7 +565,6 @@ class Plugin:
                 transcription_language=(
                     None if transcription_language == "auto" else transcription_language
                 ),
-                translate_to_english=translate_to_english,
                 diagnostic_reporter=lambda name, error=None: (
                     telemetry_capture_error(
                         name,
@@ -756,29 +751,27 @@ class Plugin:
             return {"success": False, "error": str(e)}
 
     async def set_transcription_options(self, language: str = "auto", translateToEnglish: bool = False):
-        """Set faster-whisper language selection and translation behavior."""
+        """Set Faster Whisper language selection."""
         try:
             language = _normalize_transcription_language(language)
-            translate_to_english = bool(translateToEnglish)
             config = _read_button_config()
             config["transcriptionLanguage"] = language
-            config["translateToEnglish"] = translate_to_english
+            config["translateToEnglish"] = False
             _write_button_config(config)
 
             if Plugin.voice_service:
                 Plugin.voice_service.set_transcription_options(
                     None if language == "auto" else language,
-                    translate_to_english,
                 )
 
             logger.info(
                 "Transcription options updated: "
-                f"language={language}, translate_to_english={translate_to_english}"
+                f"language={language}"
             )
             return {
                 "success": True,
                 "language": language,
-                "translateToEnglish": translate_to_english,
+                "translateToEnglish": False,
             }
         except Exception as e:
             logger.error(f"Error setting transcription options: {traceback.format_exc()}")

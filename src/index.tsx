@@ -37,7 +37,7 @@ const setShareDiagnosticsRpc = callable<[enabled: boolean], RpcResponse>("set_sh
 const setActivePresetRpc = callable<[game: string], RpcResponse>("set_active_preset");
 const setModelSizeRpc = callable<[modelSize: string], RpcResponse>("set_model_size");
 const setTranscriptionOptionsRpc = callable<
-	[language: string, translateToEnglish: boolean],
+	[language: string],
 	RpcResponse
 >("set_transcription_options");
 const setButtonConfig = callable<
@@ -237,18 +237,18 @@ class DecktationLogic {
 
 // Available button options
 const BUTTON_OPTIONS: DropdownOption[] = [
-	{ data: "L1", label: "L1 (Left Bumper)" },
-	{ data: "R1", label: "R1 (Right Bumper)" },
-	{ data: "L2", label: "L2 (Left Trigger)" },
-	{ data: "R2", label: "R2 (Right Trigger)" },
-	{ data: "L4", label: "L4 (Left Upper Grip)" },
-	{ data: "R4", label: "R4 (Right Upper Grip)" },
-	{ data: "L5", label: "L5 (Left Lower Grip)" },
-	{ data: "R5", label: "R5 (Right Lower Grip)" },
-	{ data: "A", label: "A Button" },
-	{ data: "B", label: "B Button" },
-	{ data: "X", label: "X Button" },
-	{ data: "Y", label: "Y Button" },
+	{ data: "L1", label: "L1 Bumper" },
+	{ data: "R1", label: "R1 Bumper" },
+	{ data: "L2", label: "L2 Trigger" },
+	{ data: "R2", label: "R2 Trigger" },
+	{ data: "L4", label: "L4 Grip" },
+	{ data: "R4", label: "R4 Grip" },
+	{ data: "L5", label: "L5 Grip" },
+	{ data: "R5", label: "R5 Grip" },
+	{ data: "A", label: "A" },
+	{ data: "B", label: "B" },
+	{ data: "X", label: "X" },
+	{ data: "Y", label: "Y" },
 ];
 
 const WHISPER_LANGUAGE_OPTIONS: DropdownOption[] = [
@@ -356,10 +356,16 @@ const WHISPER_LANGUAGE_OPTIONS: DropdownOption[] = [
 ];
 
 const MODEL_SIZE_OPTIONS: DropdownOption[] = [
-	{ data: "base", label: "Base - Fastest" },
-	{ data: "small", label: "Small - Recommended" },
-	{ data: "medium", label: "Medium - Best Accuracy" },
+	{ data: "base", label: "Base" },
+	{ data: "small", label: "Small" },
+	{ data: "medium", label: "Medium" },
 ];
+
+const PRESET_DISPLAY_NAMES: Record<string, string> = {
+	wow: "WoW",
+	guildwars2: "GW2",
+	generic: "Generic",
+};
 
 const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 	const [enabled, setEnabled] = useState<boolean>(false);
@@ -378,7 +384,6 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 	const [shareDiagnostics, setShareDiagnostics] = useState<boolean>(false);
 	const [modelSize, setModelSize] = useState<string>("base");
 	const [transcriptionLanguage, setTranscriptionLanguage] = useState<string>("auto");
-	const [translateToEnglish, setTranslateToEnglish] = useState<boolean>(false);
 	const [lastTranscription, setLastTranscription] = useState<string>("");
 	const [lastTranscriptionTime, setLastTranscriptionTime] = useState<string>("");
 	const [rpcError, setRpcError] = useState<string>("");
@@ -408,20 +413,17 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 					if (config.confirmMode !== undefined) {
 						setConfirmMode(config.confirmMode);
 					}
-						if (config.manualSend !== undefined) {
-							setManualSend(config.manualSend);
-						}
-						if (config.shareDiagnostics !== undefined) {
-							setShareDiagnostics(config.shareDiagnostics);
-						}
-						if (config.modelSize) {
-							setModelSize(config.modelSize);
-						}
-						if (config.transcriptionLanguage) {
-							setTranscriptionLanguage(config.transcriptionLanguage);
-						}
-					if (config.translateToEnglish !== undefined) {
-						setTranslateToEnglish(config.translateToEnglish);
+					if (config.manualSend !== undefined) {
+						setManualSend(config.manualSend);
+					}
+					if (config.shareDiagnostics !== undefined) {
+						setShareDiagnostics(config.shareDiagnostics);
+					}
+					if (config.modelSize) {
+						setModelSize(config.modelSize);
+					}
+					if (config.transcriptionLanguage) {
+						setTranscriptionLanguage(config.transcriptionLanguage);
 					}
 					// Restore enabled state
 					if (config.enabled) {
@@ -439,7 +441,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 			if (result.success) {
 				const opts: DropdownOption[] = result.presets.map((p: { id: string; name: string }) => ({
 					data: p.id,
-					label: p.name,
+					label: PRESET_DISPLAY_NAMES[p.id] || p.name,
 				}));
 				setPresets(opts);
 			}
@@ -497,7 +499,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						</div>
 					</PanelSectionRow>
 				)}
-			{serviceReady && modelLoading && (
+				{serviceReady && modelLoading && (
 					<PanelSectionRow>
 						<div style={{
 							padding: '10px',
@@ -509,25 +511,25 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 							Loading Whisper model...
 						</div>
 					</PanelSectionRow>
-			)}
-			{serviceReady && !inputReady && (
+				)}
+				{serviceReady && !inputReady && (
+					<PanelSectionRow>
+						<div style={{
+							padding: '10px',
+							backgroundColor: '#8b2d2d',
+							borderRadius: '8px',
+							textAlign: 'center',
+							fontWeight: 'bold'
+						}}>
+							Keyboard helper unavailable. Reload the plugin or reinstall Decktation.
+						</div>
+					</PanelSectionRow>
+				)}
 				<PanelSectionRow>
-					<div style={{
-						padding: '10px',
-						backgroundColor: '#8b2d2d',
-						borderRadius: '8px',
-						textAlign: 'center',
-						fontWeight: 'bold'
-					}}>
-						Keyboard helper unavailable. Reload the plugin or reinstall Decktation.
-					</div>
-				</PanelSectionRow>
-			)}
-				<PanelSectionRow>
-						<ToggleField
-							label="Enable Dictation"
-							checked={enabled}
-							disabled={!serviceReady || modelLoading}
+					<ToggleField
+						label="Enable"
+						checked={enabled}
+						disabled={!serviceReady || modelLoading}
 						onChange={async (e) => {
 							setEnabled(e);
 							logic.enabled = e;
@@ -542,25 +544,25 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 								setRecording(false);
 							}
 						}}
-						/>
-					</PanelSectionRow>
+					/>
+				</PanelSectionRow>
 
-					{enabled && modelReady && (
-						<PanelSectionRow>
-							<div style={{
-								padding: '12px',
-								backgroundColor: recording ? '#4ade80' : '#3b4252',
-								borderRadius: '8px',
-								textAlign: 'center',
-								fontWeight: 'bold',
-								fontSize: '14px',
-								border: recording ? '2px solid #22c55e' : '2px solid #4c566a',
-								transition: 'all 0.3s ease'
-							}}>
-								{recording ? '🎤 Recording...' : '✓ Ready'}
-							</div>
-						</PanelSectionRow>
-					)}
+				{enabled && modelReady && (
+					<PanelSectionRow>
+						<div style={{
+							padding: '12px',
+							backgroundColor: recording ? '#4ade80' : '#3b4252',
+							borderRadius: '8px',
+							textAlign: 'center',
+							fontWeight: 'bold',
+							fontSize: '14px',
+							border: recording ? '2px solid #22c55e' : '2px solid #4c566a',
+							transition: 'all 0.3s ease'
+						}}>
+							{recording ? '🎤 Recording...' : '✓ Ready'}
+						</div>
+					</PanelSectionRow>
+				)}
 
 					<PanelSectionRow>
 						<div style={{ marginTop: '4px', marginBottom: '8px' }}>
@@ -583,55 +585,55 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						</div>
 					</PanelSectionRow>
 
-					<PanelSectionRow>
-						<Focusable
-							tabIndex={0}
-							role="textbox"
-							aria-label="Last transcription"
-							aria-readonly="true"
-							onActivate={() => {}}
-							focusWithinClassName="gpfocuswithin"
-							style={{
-								padding: '12px',
-								backgroundColor: '#1a2f1a',
-								borderRadius: '8px',
-								marginTop: '12px',
-								border: '1px solid #2d5a2d'
-							}}
-						>
+				<PanelSectionRow>
+					<Focusable
+						tabIndex={0}
+						role="textbox"
+						aria-label="Last transcription"
+						aria-readonly="true"
+						onActivate={() => {}}
+						focusWithinClassName="gpfocuswithin"
+						style={{
+							padding: '12px',
+							backgroundColor: '#1a2f1a',
+							borderRadius: '8px',
+							marginTop: '12px',
+							border: '1px solid #2d5a2d'
+						}}
+					>
+						<div style={{
+							fontWeight: 'bold',
+							marginBottom: '8px',
+							color: '#4ade80',
+							fontSize: '14px'
+						}}>
+							Last Transcription:
+						</div>
+						<div style={{
+							backgroundColor: '#0f1f0f',
+							padding: '10px',
+							borderRadius: '6px',
+							fontFamily: 'monospace',
+							fontSize: '13px',
+							wordWrap: 'break-word',
+							minHeight: '40px',
+							lineHeight: '1.4',
+							border: '1px solid #1a3a1a'
+						}}>
+							{lastTranscription || <span style={{ color: '#666', fontStyle: 'italic' }}>No transcription yet</span>}
+						</div>
+						{lastTranscriptionTime && (
 							<div style={{
-								fontWeight: 'bold',
-								marginBottom: '8px',
-								color: '#4ade80',
-								fontSize: '14px'
+								fontSize: '11px',
+								marginTop: '8px',
+								color: '#888',
+								textAlign: 'right'
 							}}>
-								Last Transcription:
+								{lastTranscriptionTime}
 							</div>
-							<div style={{
-								backgroundColor: '#0f1f0f',
-								padding: '10px',
-								borderRadius: '6px',
-								fontFamily: 'monospace',
-								fontSize: '13px',
-								wordWrap: 'break-word',
-								minHeight: '40px',
-								lineHeight: '1.4',
-								border: '1px solid #1a3a1a'
-							}}>
-								{lastTranscription || <span style={{ color: '#666', fontStyle: 'italic' }}>No transcription yet</span>}
-							</div>
-							{lastTranscriptionTime && (
-								<div style={{
-									fontSize: '11px',
-									marginTop: '8px',
-									color: '#888',
-									textAlign: 'right'
-								}}>
-									{lastTranscriptionTime}
-								</div>
-							)}
-						</Focusable>
-					</PanelSectionRow>
+						)}
+					</Focusable>
+				</PanelSectionRow>
 			</PanelSection>
 
 			<PanelSection title="Transcription">
@@ -639,7 +641,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 					<PanelSectionRow>
 						<DropdownItem
 							label="Game"
-							menuLabel="Select Game"
+							menuLabel="Game"
 							rgOptions={presets}
 							selectedOption={activePreset}
 							onChange={async (option) => {
@@ -653,8 +655,8 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 
 				<PanelSectionRow>
 					<DropdownItem
-						label="Model Size"
-						menuLabel="Whisper Model Size"
+						label="Model"
+						menuLabel="Model"
 						rgOptions={MODEL_SIZE_OPTIONS}
 						selectedOption={modelSize}
 						onChange={async (option) => {
@@ -683,38 +685,22 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						lineHeight: '1.5',
 						border: '1px solid #444',
 					}}>
-						Base is fastest. Small is the recommended balance. Medium is more accurate but much slower on Steam Deck CPU. Changing models may trigger a one-time download.
+						Base is fastest. Small is the balanced choice. Medium is more accurate but slower and may download on first use.
 					</div>
 				</PanelSectionRow>
 
 				<PanelSectionRow>
 					<DropdownItem
-						label="Language"
-						menuLabel="Transcription Language"
+						label="Lang"
+						menuLabel="Language"
 						rgOptions={WHISPER_LANGUAGE_OPTIONS}
 						selectedOption={transcriptionLanguage}
 						onChange={async (option) => {
 							const language = option.data as string;
 							setTranscriptionLanguage(language);
-							const result = await setTranscriptionOptionsRpc(language, translateToEnglish);
+							const result = await setTranscriptionOptionsRpc(language);
 							if (!result.success) {
 								setRpcError(result.error || "Could not update language setting");
-							}
-						}}
-					/>
-				</PanelSectionRow>
-
-				<PanelSectionRow>
-					<ToggleField
-						label="Translate to English"
-						description="Transcribe non-English speech as English text"
-						checked={translateToEnglish}
-						onChange={async (e) => {
-							setTranslateToEnglish(e);
-							const result = await setTranscriptionOptionsRpc(transcriptionLanguage, e);
-							if (!result.success) {
-								setTranslateToEnglish(!e);
-								setRpcError(result.error || "Could not update translation setting");
 							}
 						}}
 					/>
@@ -724,8 +710,8 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 			<PanelSection title="Input">
 				<PanelSectionRow>
 					<ToggleField
-						label="Show Notifications"
-						description="Show toast when recording starts/stops"
+						label="Toasts"
+						description="Recording alerts"
 						checked={showNotifications}
 						onChange={async (e) => {
 							setShowNotifications(e);
@@ -741,8 +727,8 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 
 				<PanelSectionRow>
 					<ToggleField
-						label="Confirm Before Sending"
-						description="Waits before typing (longer for more words) — hold the buttons again to cancel"
+						label="Confirm"
+						description="Delay before send"
 						checked={confirmMode}
 						onChange={async (e) => {
 							setConfirmMode(e);
@@ -753,8 +739,8 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 
 				<PanelSectionRow>
 					<ToggleField
-						label="Manual Send"
-						description="Type text into chat but let you press Enter to send"
+						label="Manual"
+						description="You press Enter"
 						checked={manualSend}
 						onChange={async (e) => {
 							setManualSend(e);
@@ -782,7 +768,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						<PanelSectionRow>
 							<DropdownItem
 								label={`Button ${index + 1}`}
-								menuLabel={`Select Button ${index + 1}`}
+								menuLabel={`Button ${index + 1}`}
 								rgOptions={BUTTON_OPTIONS}
 								selectedOption={button}
 								onChange={async (option) => {
@@ -839,7 +825,7 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 									}
 								}}
 							>
-								➕ Add Button
+								Add Button
 							</ButtonItem>
 						</div>
 					</PanelSectionRow>
@@ -857,16 +843,16 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 						Input: {logic.inputRegistered ? "OK" : "FAILED"}
 						<br />
 						Button: <strong>{buttonState}</strong>
-						</div>
-					</PanelSectionRow>
+					</div>
+				</PanelSectionRow>
 
 			</PanelSection>
 
 			<PanelSection title="Diagnostics">
 				<PanelSectionRow>
 					<ToggleField
-						label="Share Anonymous Diagnostics"
-						description="Share privacy-scrubbed errors and performance data to help improve Decktation"
+						label="Share"
+						description="Anonymous diagnostics"
 						checked={shareDiagnostics}
 						onChange={async (e) => {
 							setShareDiagnostics(e);

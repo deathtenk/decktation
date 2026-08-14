@@ -18,7 +18,7 @@ import wave
 
 
 class WoWVoiceChat:
-    def __init__(self, context_file="wow_context.json", sample_rate=44100, default_channel="say", lazy_load=False, test_mode=False, test_audio_file=None, preset=None, confirm_delay=0, manual_send=False, transcription_language=None, translate_to_english=False, model_size="base", diagnostic_reporter=None):
+    def __init__(self, context_file="wow_context.json", sample_rate=44100, default_channel="say", lazy_load=False, test_mode=False, test_audio_file=None, preset=None, confirm_delay=0, manual_send=False, transcription_language=None, model_size="base", diagnostic_reporter=None):
         self.preset = preset or {}
         self.diagnostic_reporter = diagnostic_reporter
         self.context_file = Path(context_file)
@@ -28,7 +28,6 @@ class WoWVoiceChat:
         self.confirm_delay = confirm_delay  # seconds to wait before auto-sending (0 = disabled)
         self.manual_send = manual_send  # if True, skip final Enter press (user sends manually)
         self.transcription_language = None if transcription_language in (None, "", "auto") else transcription_language
-        self.translate_to_english = bool(translate_to_english)
         self.model_size = model_size
         self.pending_text = None
         self._pending_timer = None
@@ -167,10 +166,9 @@ class WoWVoiceChat:
         self.default_channel = preset.get("default_channel", "say")
         self.channel_commands = preset.get("channels") or {"say": "", "type": ""}
 
-    def set_transcription_options(self, language=None, translate_to_english=False):
+    def set_transcription_options(self, language=None):
         """Update faster-whisper transcription options without reloading the model."""
         self.transcription_language = language or None
-        self.translate_to_english = bool(translate_to_english)
 
     def set_model_size(self, model_size):
         """Update the selected model size and reload if a model is already active."""
@@ -226,8 +224,8 @@ class WoWVoiceChat:
         """Build initial_prompt and hotwords from context"""
         # English game prompts bias non-English transcription heavily. When the
         # user explicitly selects a non-English language, let Whisper work from
-        # the audio alone unless they are using translation mode.
-        if self.transcription_language and not self.translate_to_english:
+        # the audio alone.
+        if self.transcription_language:
             return None, None
 
         base_prompt = self.preset.get("whisper_prompt") if self.preset else None
@@ -394,7 +392,7 @@ class WoWVoiceChat:
                 initial_prompt=initial_prompt,
                 hotwords=hotwords,
                 language=self.transcription_language,
-                task="translate" if self.translate_to_english else "transcribe",
+                task="transcribe",
                 vad_filter=True,
                 condition_on_previous_text=False,
             )

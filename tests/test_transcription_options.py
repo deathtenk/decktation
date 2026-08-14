@@ -66,12 +66,11 @@ def test_transcription_defaults_auto_detect_and_transcribe(monkeypatch):
     assert service.model.kwargs["task"] == "transcribe"
 
 
-def test_transcription_can_preselect_language_and_translate(monkeypatch):
+def test_transcription_can_preselect_language(monkeypatch):
     monkeypatch.setattr(wow_voice_chat, "np", FakeNumpy)
     service = WoWVoiceChat(
         lazy_load=True,
         transcription_language="fr",
-        translate_to_english=True,
     )
     service.model = FakeModel()
     service._prepare_audio = lambda audio, sample_rate: FakeAudio([0.0, 0.1])
@@ -79,7 +78,7 @@ def test_transcription_can_preselect_language_and_translate(monkeypatch):
     assert service.transcribe_audio([0.0, 0.1]) == "hello"
 
     assert service.model.kwargs["language"] == "fr"
-    assert service.model.kwargs["task"] == "translate"
+    assert service.model.kwargs["task"] == "transcribe"
 
 
 def test_non_english_transcription_skips_english_prompt_bias(monkeypatch):
@@ -100,26 +99,6 @@ def test_non_english_transcription_skips_english_prompt_bias(monkeypatch):
     assert service.model.kwargs["task"] == "transcribe"
     assert service.model.kwargs["initial_prompt"] is None
     assert service.model.kwargs["hotwords"] is None
-
-
-def test_translate_mode_keeps_prompt_for_non_english_language(monkeypatch):
-    monkeypatch.setattr(wow_voice_chat, "np", FakeNumpy)
-    service = WoWVoiceChat(
-        lazy_load=True,
-        transcription_language="fa",
-        translate_to_english=True,
-        preset={"whisper_prompt": "English-only prompt", "context_file": "wow_context.json"},
-    )
-    service.model = FakeModel()
-    service._prepare_audio = lambda audio, sample_rate: FakeAudio([0.0, 0.1])
-    service.load_context = lambda: True
-    service.context = {"zone": "Azeroth", "boss": "Illidan"}
-
-    assert service.transcribe_audio([0.0, 0.1]) == "hello"
-
-    assert service.model.kwargs["language"] == "fa"
-    assert service.model.kwargs["task"] == "translate"
-    assert service.model.kwargs["initial_prompt"] is not None
 
 
 def test_model_load_uses_selected_model_size(monkeypatch):
