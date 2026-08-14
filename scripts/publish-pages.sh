@@ -4,20 +4,30 @@ set -euo pipefail
 
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
-: "${GITHUB_SHA:?GITHUB_SHA is required}"
-: "${REF_NAME:?REF_NAME is required}"
-: "${REF_TYPE:?REF_TYPE is required}"
 : "${PAGES_BASE_URL:?PAGES_BASE_URL is required}"
 
+CLEANUP_ONLY="${CLEANUP_ONLY:-false}"
+GITHUB_SHA="${GITHUB_SHA:-}"
+REF_NAME="${REF_NAME:-}"
+REF_TYPE="${REF_TYPE:-}"
 RELEASE_TAG="${RELEASE_TAG:-$REF_NAME}"
-SITE_DIR=/tmp/decktation-pages-site
 PAGES_DIR=/tmp/decktation-gh-pages
 ZIP_SOURCE=build-output/decktation.zip
 
-if [ ! -f "$ZIP_SOURCE" ]; then
+if [ "$CLEANUP_ONLY" != "true" ] && [ ! -f "$ZIP_SOURCE" ]; then
   echo "Missing build artifact: $ZIP_SOURCE" >&2
   exit 1
 fi
+
+if [ "$CLEANUP_ONLY" != "true" ]; then
+  : "${GITHUB_SHA:?GITHUB_SHA is required}"
+  : "${REF_NAME:?REF_NAME is required}"
+  : "${REF_TYPE:?REF_TYPE is required}"
+fi
+
+normalize_ref() {
+  printf '%s' "$1" | python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))'
+}
 
 escape_json() {
   printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
@@ -158,68 +168,96 @@ render_index_list() {
     local dir
     dir="$(dirname "$rel")"
     local name
-    name="${dir#${section_dir#$PAGES_DIR/}/}"
+    name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["ref"])' "$metadata")"
     printf '  <li><a href="%s/%s/">%s</a> <span>%s</span></li>\n' \
       "$base_url" "$dir" "$name" "$dir"
   done
   printf '</ul></section>\n'
 }
 
-rm -rf "$SITE_DIR" "$PAGES_DIR"
-mkdir -p "$SITE_DIR"
+cleanup_deleted_branch_dirs() {
+  local branches_dir="$PAGES_DIR/branches"
+  local remote_heads
+  local normalized_heads
 
-git clone --depth 1 --branch gh-pages \
-  "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-  "$PAGES_DIR" 2>/dev/null || {
-  git clone --depth 1 \
-    "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-    "$PAGES_DIR"
-  cd "$PAGES_DIR"
-  git checkout --orphan gh-pages
-  git rm -rf . >/dev/null 2>&1 || true
-  cd - >/dev/null
+  mkdir -p "$branches_dir"
+  remote_heads="$(git ls-remote --heads origin)"
+  normalized_heads="$(
+    printf '%s\n' "$remote_heads" | while read -r _ ref; do
+      normalize_ref "${ref#refs/heads/}"
+    done
+  )"
+
+  find "$branches_dir" -mindepth 1 -maxdepth 1 -type d | while read -r branch_dir; do
+    local branch_key
+    branch_key="$(basename "$branch_dir")"
+    if ! printf '%s\n' "$normalized_heads" | grep -Fxq "$branch_key"; then
+      rm -rf "$branch_dir"
+    fi
+  done
 }
 
-mkdir -p "$PAGES_DIR/branches/$REF_NAME"
-cp "$ZIP_SOURCE" "$PAGES_DIR/branches/$REF_NAME/decktation.zip"
-write_metadata \
-  "$PAGES_DIR/branches/$REF_NAME/metadata.json" \
-  "branch" \
-  "$REF_NAME" \
-  "$PAGES_BASE_URL/branches/$REF_NAME/decktation.zip"
-write_download_page \
-  "$PAGES_DIR/branches/$REF_NAME/index.html" \
-  "Decktation branch build: $REF_NAME" \
-  "$PAGES_BASE_URL/branches/$REF_NAME/decktation.zip" \
-  "$PAGES_BASE_URL/branches/$REF_NAME/metadata.json"
+checkout_pages_branch() {
+  git clone --depth 1 --branch gh-pages \
+    "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+    "$PAGES_DIR" 2>/dev/null || {
+    git clone --depth 1 \
+      "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+      "$PAGES_DIR"
+    cd "$PAGES_DIR"
+    git checkout --orphan gh-pages
+    git rm -rf . >/dev/null 2>&1 || true
+    cd - >/dev/null
+  }
+}
 
-if [ "$REF_TYPE" = "tag" ]; then
-  mkdir -p "$PAGES_DIR/releases/$RELEASE_TAG" "$PAGES_DIR/releases/latest"
-  cp "$ZIP_SOURCE" "$PAGES_DIR/releases/$RELEASE_TAG/decktation.zip"
-  cp "$ZIP_SOURCE" "$PAGES_DIR/releases/latest/decktation.zip"
-  write_metadata \
-    "$PAGES_DIR/releases/$RELEASE_TAG/metadata.json" \
-    "release" \
-    "$RELEASE_TAG" \
-    "$PAGES_BASE_URL/releases/$RELEASE_TAG/decktation.zip"
-  write_metadata \
-    "$PAGES_DIR/releases/latest/metadata.json" \
-    "release-latest" \
-    "$RELEASE_TAG" \
-    "$PAGES_BASE_URL/releases/latest/decktation.zip"
-  write_download_page \
-    "$PAGES_DIR/releases/$RELEASE_TAG/index.html" \
-    "Decktation release build: $RELEASE_TAG" \
-    "$PAGES_BASE_URL/releases/$RELEASE_TAG/decktation.zip" \
-    "$PAGES_BASE_URL/releases/$RELEASE_TAG/metadata.json"
-  write_download_page \
-    "$PAGES_DIR/releases/latest/index.html" \
-    "Decktation latest release" \
-    "$PAGES_BASE_URL/releases/latest/decktation.zip" \
-    "$PAGES_BASE_URL/releases/latest/metadata.json"
-fi
+render_pages_content() {
+  if [ "$CLEANUP_ONLY" != "true" ]; then
+    local branch_key
+    branch_key="$(normalize_ref "$REF_NAME")"
+    mkdir -p "$PAGES_DIR/branches/$branch_key"
+    cp "$ZIP_SOURCE" "$PAGES_DIR/branches/$branch_key/decktation.zip"
+    write_metadata \
+      "$PAGES_DIR/branches/$branch_key/metadata.json" \
+      "branch" \
+      "$REF_NAME" \
+      "$PAGES_BASE_URL/branches/$branch_key/decktation.zip"
+    write_download_page \
+      "$PAGES_DIR/branches/$branch_key/index.html" \
+      "Decktation branch build: $REF_NAME" \
+      "$PAGES_BASE_URL/branches/$branch_key/decktation.zip" \
+      "$PAGES_BASE_URL/branches/$branch_key/metadata.json"
+  fi
 
-cat >"$PAGES_DIR/index.html" <<EOF
+  cleanup_deleted_branch_dirs
+
+  if [ "$CLEANUP_ONLY" != "true" ] && [ "$REF_TYPE" = "tag" ]; then
+    mkdir -p "$PAGES_DIR/releases/$RELEASE_TAG" "$PAGES_DIR/releases/latest"
+    cp "$ZIP_SOURCE" "$PAGES_DIR/releases/$RELEASE_TAG/decktation.zip"
+    cp "$ZIP_SOURCE" "$PAGES_DIR/releases/latest/decktation.zip"
+    write_metadata \
+      "$PAGES_DIR/releases/$RELEASE_TAG/metadata.json" \
+      "release" \
+      "$RELEASE_TAG" \
+      "$PAGES_BASE_URL/releases/$RELEASE_TAG/decktation.zip"
+    write_metadata \
+      "$PAGES_DIR/releases/latest/metadata.json" \
+      "release-latest" \
+      "$RELEASE_TAG" \
+      "$PAGES_BASE_URL/releases/latest/decktation.zip"
+    write_download_page \
+      "$PAGES_DIR/releases/$RELEASE_TAG/index.html" \
+      "Decktation release build: $RELEASE_TAG" \
+      "$PAGES_BASE_URL/releases/$RELEASE_TAG/decktation.zip" \
+      "$PAGES_BASE_URL/releases/$RELEASE_TAG/metadata.json"
+    write_download_page \
+      "$PAGES_DIR/releases/latest/index.html" \
+      "Decktation latest release" \
+      "$PAGES_BASE_URL/releases/latest/decktation.zip" \
+      "$PAGES_BASE_URL/releases/latest/metadata.json"
+  fi
+
+  cat >"$PAGES_DIR/index.html" <<EOF
 <!doctype html>
 <html lang="en">
 <head>
@@ -310,7 +348,7 @@ cat >"$PAGES_DIR/index.html" <<EOF
       </div>
       <div class="panel">
         <p><strong>Latest release ZIP</strong><br><code>${PAGES_BASE_URL}/releases/latest/decktation.zip</code></p>
-        <p><strong>Branch ZIP pattern</strong><br><code>${PAGES_BASE_URL}/branches/&lt;branch-name&gt;/decktation.zip</code></p>
+        <p><strong>Branch ZIP pattern</strong><br><code>${PAGES_BASE_URL}/branches/&lt;url-encoded-branch-name&gt;/decktation.zip</code></p>
       </div>
     </div>
     $(render_index_list "$PAGES_DIR/releases" "Releases" "$PAGES_BASE_URL")
@@ -320,16 +358,35 @@ cat >"$PAGES_DIR/index.html" <<EOF
 </html>
 EOF
 
-touch "$PAGES_DIR/.nojekyll"
+  touch "$PAGES_DIR/.nojekyll"
+}
 
-cd "$PAGES_DIR"
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+publish_pages() {
+  cd "$PAGES_DIR"
+  git config user.name "github-actions[bot]"
+  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-if git status --short | grep -q .; then
-  git add .
-  git commit -m "Publish downloads for $REF_TYPE $REF_NAME"
-  git push origin gh-pages
-else
-  echo "No gh-pages changes to publish."
-fi
+  if git status --short | grep -q .; then
+    git add .
+    git commit -m "Publish downloads for $REF_TYPE $REF_NAME"
+    git push origin gh-pages
+  else
+    echo "No gh-pages changes to publish."
+  fi
+}
+
+for attempt in 1 2 3; do
+  rm -rf "$PAGES_DIR"
+  checkout_pages_branch
+  render_pages_content
+  if publish_pages; then
+    exit 0
+  fi
+  if [ "$attempt" -lt 3 ]; then
+    echo "Retrying gh-pages publish after concurrent update..."
+    sleep 5
+  fi
+done
+
+echo "Failed to publish gh-pages after 3 attempts." >&2
+exit 1

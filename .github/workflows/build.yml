@@ -6,6 +6,7 @@ on:
     tags: ['v*']
   pull_request:
     branches: [master, main]
+  delete:
   release:
     types: [created]
 
@@ -23,6 +24,7 @@ jobs:
       - run: python -m py_compile main.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py
 
   build:
+    if: github.event_name != 'delete'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -94,3 +96,19 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+  cleanup-pages:
+    if: github.event_name == 'delete'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prune deleted branch downloads
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PAGES_BASE_URL: https://silverfoxy.github.io/decktation
+          CLEANUP_ONLY: "true"
+        run: bash scripts/publish-pages.sh

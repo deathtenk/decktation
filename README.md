@@ -25,7 +25,7 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 > Recommended stable URL:
 > **[`https://silverfoxy.github.io/decktation/releases/latest/decktation.zip`](https://silverfoxy.github.io/decktation/releases/latest/decktation.zip)**
 > Branch build URL pattern:
-> **`https://silverfoxy.github.io/decktation/branches/<branch-name>/decktation.zip`**
+> **`https://silverfoxy.github.io/decktation/branches/<url-encoded-branch-name>/decktation.zip`**
 > GitHub release assets also work:
 > **[`https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip`](https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip)**
 >
@@ -38,6 +38,9 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 2. Paste the direct ZIP URL above, or download `decktation.zip` first and then
    choose the file locally. Decky imports the archive and reloads the plugin
    automatically.
+
+For example, branch `feature/chat polish` becomes
+`feature%2Fchat%20polish` in the URL path.
 
 All dependencies and the private keyboard helper are pre-bundled in the
 release. No system packages or one-time `sudo` setup are required.
