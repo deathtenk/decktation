@@ -59,10 +59,23 @@ jobs:
           ! unzip -l build-output/decktation.zip | grep -q 'cpython-313'
           ! unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/av/'
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload CI build as a direct file
+        uses: actions/upload-artifact@v7
         with:
-          name: decktation
           path: build-output/decktation.zip
+          archive: false
+
+      - name: Publish Pages downloads
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          PAGES_BASE_URL: https://silverfoxy.github.io/decktation
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: bash scripts/publish-pages.sh
 
       - name: Upload release archive
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')

@@ -21,15 +21,23 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 ## Installation
 
 > [!IMPORTANT]
-> Download **[`decktation.zip`](https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip)** from the release's **Assets** section.
-> Do **not** download GitHub's **Source code (zip)** or **Source code (tar.gz)**;
-> those archives do not contain Decktation's Python dependencies.
+> Use a direct ZIP URL that points to the packaged plugin artifact.
+> Recommended stable URL:
+> **[`https://silverfoxy.github.io/decktation/releases/latest/decktation.zip`](https://silverfoxy.github.io/decktation/releases/latest/decktation.zip)**
+> Branch build URL pattern:
+> **`https://silverfoxy.github.io/decktation/branches/<branch-name>/decktation.zip`**
+> GitHub release assets also work:
+> **[`https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip`](https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip)**
+>
+> Do **not** use GitHub's **Source code (zip)** or **Source code (tar.gz)** archives.
+> Those do not contain Decktation's bundled Python dependencies.
 
 1. Open **Decky Settings**, enable developer options if necessary, and select
-   **Install Plugin from ZIP**.
+   **Install Plugin from URL** or **Install Plugin from ZIP**.
 
-2. Choose the downloaded `decktation.zip`. Decky imports the archive and
-   reloads the plugin automatically.
+2. Paste the direct ZIP URL above, or download `decktation.zip` first and then
+   choose the file locally. Decky imports the archive and reloads the plugin
+   automatically.
 
 All dependencies and the private keyboard helper are pre-bundled in the
 release. No system packages or one-time `sudo` setup are required.
