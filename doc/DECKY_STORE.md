@@ -11,8 +11,10 @@ run this repository's `.github/workflows/build.yml` first.
 - Store metadata includes a public HTTPS image.
 - `package.json` contains the canonical plugin version.
 - A root MIT `LICENSE` is included.
-- Runtime Python dependencies are pinned in `backend/src/requirements.txt`.
-- Decky's Holo backend builds the Python runtime directory and ydotool 1.0.4.
+- Runtime Python dependencies are defined in `runtime/pyproject.toml` and
+  frozen in `runtime/uv.lock`.
+- Decky's Holo backend builds the packaged `decktation-runtime` executable and
+  ydotool 1.0.4.
 - The ydotool source revision, build recipe, and AGPL license are included.
 - The plugin owns a private `0600` ydotool socket and cleans up its process.
 - `_root` is declared for `/dev/uinput` and raw Steam Deck HID access.
