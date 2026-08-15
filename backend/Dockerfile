@@ -6,7 +6,7 @@ RUN pacman -Sydd --noconfirm --dbpath /var/lib/pacman \
         git portaudio python-pip
 
 RUN mkdir -p /backend
-COPY backend/entrypoint.sh /backend/entrypoint.sh
+COPY entrypoint.sh /backend/entrypoint.sh
 RUN chmod 755 /backend/entrypoint.sh
 
 WORKDIR /runtime-build
