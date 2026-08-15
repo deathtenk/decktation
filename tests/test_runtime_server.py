@@ -60,7 +60,14 @@ def test_server_emits_startup_event_and_serves_initialize_status_shutdown():
             + "\n"
         )
         stdout = StringIO()
-        server = RuntimeServer(stdin=stdin, stdout=stdout, backend=RuntimeBackend(service_factory=FakeService))
+        server = RuntimeServer(
+            stdin=stdin,
+            stdout=stdout,
+            backend=RuntimeBackend(
+                service_factory=FakeService,
+                enable_runtime_processes=False,
+            ),
+        )
 
         exit_code = server.serve_forever()
         messages = read_messages(stdout)
@@ -106,7 +113,11 @@ def test_server_emits_startup_event_and_serves_initialize_status_shutdown():
 def test_server_returns_unknown_method_error():
     stdin = StringIO('{"id":"req-1","method":"nope","params":{}}\n')
     stdout = StringIO()
-    server = RuntimeServer(stdin=stdin, stdout=stdout)
+    server = RuntimeServer(
+        stdin=stdin,
+        stdout=stdout,
+        backend=RuntimeBackend(enable_runtime_processes=False),
+    )
 
     server.serve_forever()
     messages = read_messages(stdout)
@@ -124,7 +135,11 @@ def test_server_returns_unknown_method_error():
 def test_server_emits_protocol_error_for_bad_json():
     stdin = StringIO("{\n")
     stdout = StringIO()
-    server = RuntimeServer(stdin=stdin, stdout=stdout)
+    server = RuntimeServer(
+        stdin=stdin,
+        stdout=stdout,
+        backend=RuntimeBackend(enable_runtime_processes=False),
+    )
 
     server.serve_forever()
     messages = read_messages(stdout)
@@ -267,7 +282,14 @@ def test_server_supports_full_request_response_api_surface():
 
         stdin = StringIO("\n".join(json.dumps(command) for command in commands) + "\n")
         stdout = StringIO()
-        server = RuntimeServer(stdin=stdin, stdout=stdout, backend=RuntimeBackend(service_factory=FakeService))
+        server = RuntimeServer(
+            stdin=stdin,
+            stdout=stdout,
+            backend=RuntimeBackend(
+                service_factory=FakeService,
+                enable_runtime_processes=False,
+            ),
+        )
 
         server.serve_forever()
         messages = read_messages(stdout)
@@ -344,7 +366,14 @@ def test_server_validates_language_and_model_errors():
             + "\n"
         )
         stdout = StringIO()
-        server = RuntimeServer(stdin=stdin, stdout=stdout, backend=RuntimeBackend(service_factory=FakeService))
+        server = RuntimeServer(
+            stdin=stdin,
+            stdout=stdout,
+            backend=RuntimeBackend(
+                service_factory=FakeService,
+                enable_runtime_processes=False,
+            ),
+        )
 
         server.serve_forever()
         messages = read_messages(stdout)
@@ -355,3 +384,78 @@ def test_server_validates_language_and_model_errors():
         assert "Unsupported transcription language" in by_id["badlang"]["error"]["message"]
         assert by_id["badmodel"]["error"]["code"] == "internal_error"
         assert "Unsupported model size" in by_id["badmodel"]["error"]["message"]
+
+
+def test_runtime_backend_initialization_starts_processes_and_shutdown_stops_them():
+    backend = RuntimeBackend(service_factory=FakeService, enable_runtime_processes=True)
+    calls = []
+
+    backend.start_ydotoold = lambda: calls.append("start_ydotoold") or True
+    backend.start_controller_listener = lambda: calls.append("start_controller_listener") or True
+    backend.start_polling = lambda: calls.append("start_polling")
+    backend.stop_polling = lambda: calls.append("stop_polling")
+    backend.stop_controller_listener = lambda: calls.append("stop_controller_listener")
+    backend.stop_ydotoold = lambda: calls.append("stop_ydotoold")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        plugin_dir = Path(tmpdir)
+        config_dir = plugin_dir / "config"
+        defaults_dir = plugin_dir / "defaults"
+        defaults_dir.mkdir(parents=True)
+        (defaults_dir / "game_presets.json").write_text(
+            json.dumps(
+                {
+                    "wow": {
+                        "name": "World of Warcraft",
+                        "chat_open_key": "enter",
+                        "chat_send_key": "enter",
+                        "default_channel": "say",
+                        "channels": {"say": "/s ", "type": ""},
+                        "whisper_prompt": "",
+                    }
+                }
+            )
+        )
+        backend.initialize({"plugin_dir": str(plugin_dir), "config_dir": str(config_dir)})
+        backend.shutdown({})
+
+    assert calls == [
+        "start_ydotoold",
+        "start_controller_listener",
+        "start_polling",
+        "stop_polling",
+        "stop_controller_listener",
+        "stop_ydotoold",
+    ]
+
+
+def test_runtime_backend_restarts_controller_listener_after_button_config_change():
+    backend = RuntimeBackend(service_factory=FakeService, enable_runtime_processes=True)
+    calls = []
+    backend.stop_controller_listener = lambda: calls.append("stop")
+    backend.start_controller_listener = lambda: calls.append("start") or True
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        plugin_dir = Path(tmpdir)
+        config_dir = plugin_dir / "config"
+        defaults_dir = plugin_dir / "defaults"
+        defaults_dir.mkdir(parents=True)
+        (defaults_dir / "game_presets.json").write_text(
+            json.dumps(
+                {
+                    "wow": {
+                        "name": "World of Warcraft",
+                        "chat_open_key": "enter",
+                        "chat_send_key": "enter",
+                        "default_channel": "say",
+                        "channels": {"say": "/s ", "type": ""},
+                        "whisper_prompt": "",
+                    }
+                }
+            )
+        )
+        backend.initialize({"plugin_dir": str(plugin_dir), "config_dir": str(config_dir)})
+        calls.clear()
+        backend.set_button_config({"buttons": ["L1", "R1"], "showNotifications": True})
+
+    assert calls == ["stop", "start"]
