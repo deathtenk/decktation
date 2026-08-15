@@ -123,3 +123,21 @@ def test_set_model_size_reloads_loaded_model(monkeypatch):
     assert service.set_model_size("medium") is True
 
     assert [call["model_size"] for call in fake_ctor.calls] == ["base", "medium"]
+
+
+def test_parecord_command_uses_low_latency_capture_settings():
+    service = WoWVoiceChat(lazy_load=True)
+    service.sample_rate = service.whisper_sample_rate
+
+    command = service._build_parecord_command("alsa_input.test-source")
+
+    assert command == [
+        "/usr/bin/parecord",
+        "--device=alsa_input.test-source",
+        "--raw",
+        "--format=s16le",
+        f"--rate={service.whisper_sample_rate}",
+        "--channels=1",
+        f"--latency-msec={wow_voice_chat.PARECORD_LATENCY_MSEC}",
+        f"--process-time-msec={wow_voice_chat.PARECORD_PROCESS_TIME_MSEC}",
+    ]

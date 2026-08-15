@@ -16,11 +16,15 @@ import sounddevice as sd
 import numpy as np
 import wave
 import logging
+import signal
 
 from .config import DEFAULTS_DIR
 from .ydotool import candidate_paths
 
 logger = logging.getLogger(__name__)
+
+PARECORD_LATENCY_MSEC = 50
+PARECORD_PROCESS_TIME_MSEC = 50
 
 
 class WoWVoiceChat:
@@ -646,14 +650,7 @@ class WoWVoiceChat:
                 logger.info("Pulse/PipeWire default source: %s", source)
 
                 self.recording_process = subprocess.Popen(
-                    [
-                        "/usr/bin/parecord",
-                        f"--device={source}",
-                        "--raw",
-                        "--format=s16le",
-                        f"--rate={self.sample_rate}",
-                        "--channels=1",
-                    ],
+                    self._build_parecord_command(source),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     env=env,
@@ -745,16 +742,23 @@ class WoWVoiceChat:
                 process = self.recording_process
 
                 if process.poll() is None:
-                    process.terminate()
+                    process.send_signal(signal.SIGINT)
                     try:
-                        process.wait(timeout=2)
+                        process.wait(timeout=5)
                     except subprocess.TimeoutExpired:
-                        logger.warning("parecord did not terminate; killing it")
-                        process.kill()
-                        process.wait()
+                        logger.warning("parecord did not stop after SIGINT; terminating")
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            logger.warning("parecord did not terminate; killing it")
+                            process.kill()
+                            process.wait()
 
             if self.recording_thread:
-                self.recording_thread.join(timeout=2)
+                self.recording_thread.join(timeout=5)
+                if self.recording_thread.is_alive():
+                    logger.warning("parecord reader thread did not drain within timeout")
                 self.recording_thread = None
 
             if self.recording_process:
@@ -801,6 +805,18 @@ class WoWVoiceChat:
                         self._pending_timer.start()
                 else:
                     self.send_to_wow_chat(text)
+
+    def _build_parecord_command(self, source):
+        return [
+            "/usr/bin/parecord",
+            f"--device={source}",
+            "--raw",
+            "--format=s16le",
+            f"--rate={self.sample_rate}",
+            "--channels=1",
+            f"--latency-msec={PARECORD_LATENCY_MSEC}",
+            f"--process-time-msec={PARECORD_PROCESS_TIME_MSEC}",
+        ]
 
     def run_push_to_talk_keyboard(self, ptt_key='`'):
         """Run in push-to-talk mode with keyboard key"""
