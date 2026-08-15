@@ -8,6 +8,7 @@ import os
 import sys
 from typing import Callable, TextIO
 
+from .runtime_backend import RuntimeBackend
 from .protocol import (
     PROTOCOL_VERSION,
     ProtocolError,
@@ -22,7 +23,6 @@ from .protocol import (
 @dataclass
 class RuntimeState:
     initialized: bool = False
-    config: dict = field(default_factory=dict)
     startup_time: str = field(
         default_factory=lambda: datetime.now(UTC).isoformat(),
     )
@@ -37,16 +37,35 @@ class RuntimeServer:
         stdin: TextIO | None = None,
         stdout: TextIO | None = None,
         stderr: TextIO | None = None,
+        backend: RuntimeBackend | None = None,
     ):
         self.stdin = stdin or sys.stdin
         self.stdout = stdout or sys.stdout
         self.stderr = stderr or sys.stderr
         self.state = RuntimeState()
+        self.backend = backend or RuntimeBackend()
         self.handlers: dict[str, Callable[[dict], dict]] = {
             "handshake": self.handle_handshake,
             "initialize": self.handle_initialize,
             "get_status": self.handle_get_status,
             "shutdown": self.handle_shutdown,
+            "set_enabled": self.handle_set_enabled,
+            "get_button_config": self.handle_get_button_config,
+            "set_share_diagnostics": self.handle_set_share_diagnostics,
+            "set_button_config": self.handle_set_button_config,
+            "set_confirm_mode": self.handle_set_confirm_mode,
+            "set_manual_send": self.handle_set_manual_send,
+            "set_transcription_options": self.handle_set_transcription_options,
+            "set_model_size": self.handle_set_model_size,
+            "get_presets": self.handle_get_presets,
+            "get_active_preset": self.handle_get_active_preset,
+            "set_active_preset": self.handle_set_active_preset,
+            "start_recording": self.handle_start_recording,
+            "stop_recording": self.handle_stop_recording,
+            "is_recording": self.handle_is_recording,
+            "update_context": self.handle_update_context,
+            "load_model": self.handle_load_model,
+            "get_last_transcription": self.handle_get_last_transcription,
         }
 
     def emit(self, message) -> None:
@@ -64,42 +83,94 @@ class RuntimeServer:
         self.emit(event_message("protocol_error", event_payload))
 
     def handle_handshake(self, params: dict) -> dict:
-        return {
+        result = {
             "protocol_version": PROTOCOL_VERSION,
-            "runtime": "decktation-runtime",
             "initialized": self.state.initialized,
             "pid": os.getpid(),
         }
+        result.update(self.backend.handshake(params))
+        return result
 
     def handle_initialize(self, params: dict) -> dict:
-        self.state.config = dict(params)
+        result = self.backend.initialize(params)
         self.state.initialized = True
         self.log(
             "runtime initialized",
-            config_keys=sorted(self.state.config.keys()),
+            config_keys=sorted(params.keys()),
         )
-        return {
-            "protocol_version": PROTOCOL_VERSION,
-            "initialized": True,
-            "config_keys": sorted(self.state.config.keys()),
-        }
+        result.update({"protocol_version": PROTOCOL_VERSION})
+        return result
 
     def handle_get_status(self, params: dict) -> dict:
-        return {
-            "protocol_version": PROTOCOL_VERSION,
-            "runtime": "decktation-runtime",
-            "initialized": self.state.initialized,
-            "shutdown_requested": self.state.shutdown_requested,
-            "startup_time": self.state.startup_time,
-            "config_keys": sorted(self.state.config.keys()),
-        }
+        result = self.backend.get_status(params)
+        result.update(
+            {
+                "protocol_version": PROTOCOL_VERSION,
+                "runtime": "decktation-runtime",
+                "initialized": self.state.initialized,
+                "shutdown_requested": self.state.shutdown_requested,
+                "startup_time": self.state.startup_time,
+            }
+        )
+        return result
 
     def handle_shutdown(self, params: dict) -> dict:
         self.state.shutdown_requested = True
-        return {
-            "shutdown": True,
-            "initialized": self.state.initialized,
-        }
+        return self.backend.shutdown(params)
+
+    def _forward(self, method_name: str, params: dict) -> dict:
+        return getattr(self.backend, method_name)(params)
+
+    def handle_set_enabled(self, params: dict) -> dict:
+        return self._forward("set_enabled", params)
+
+    def handle_get_button_config(self, params: dict) -> dict:
+        return self._forward("get_button_config", params)
+
+    def handle_set_share_diagnostics(self, params: dict) -> dict:
+        return self._forward("set_share_diagnostics", params)
+
+    def handle_set_button_config(self, params: dict) -> dict:
+        return self._forward("set_button_config", params)
+
+    def handle_set_confirm_mode(self, params: dict) -> dict:
+        return self._forward("set_confirm_mode", params)
+
+    def handle_set_manual_send(self, params: dict) -> dict:
+        return self._forward("set_manual_send", params)
+
+    def handle_set_transcription_options(self, params: dict) -> dict:
+        return self._forward("set_transcription_options", params)
+
+    def handle_set_model_size(self, params: dict) -> dict:
+        return self._forward("set_model_size", params)
+
+    def handle_get_presets(self, params: dict) -> dict:
+        return self._forward("get_presets", params)
+
+    def handle_get_active_preset(self, params: dict) -> dict:
+        return self._forward("get_active_preset", params)
+
+    def handle_set_active_preset(self, params: dict) -> dict:
+        return self._forward("set_active_preset", params)
+
+    def handle_start_recording(self, params: dict) -> dict:
+        return self._forward("start_recording", params)
+
+    def handle_stop_recording(self, params: dict) -> dict:
+        return self._forward("stop_recording", params)
+
+    def handle_is_recording(self, params: dict) -> dict:
+        return self._forward("is_recording", params)
+
+    def handle_update_context(self, params: dict) -> dict:
+        return self._forward("update_context", params)
+
+    def handle_load_model(self, params: dict) -> dict:
+        return self._forward("load_model", params)
+
+    def handle_get_last_transcription(self, params: dict) -> dict:
+        return self._forward("get_last_transcription", params)
 
     def dispatch(self, request_line: str) -> None:
         try:
