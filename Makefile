@@ -18,7 +18,7 @@ release-check: version-check
 	if [ -x venv/bin/pytest ]; then venv/bin/pytest tests/ -q; \
 	elif [ -x .venv/bin/pytest ]; then .venv/bin/pytest tests/ -q; \
 	else python -m pytest tests/ -q; fi
-	@python -m py_compile main.py runtime_client.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py runtime/src/decktation_runtime/*.py
+	@python -m py_compile main.py runtime_client.py telemetry.py runtime/src/decktation_runtime/*.py debug_controller.py test.py
 
 runtime-lock:
 	@cd runtime && uv lock
