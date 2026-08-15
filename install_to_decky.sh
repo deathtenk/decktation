@@ -16,7 +16,7 @@ fi
 PLUGIN_DIR="$PLUGINS_DIR/decktation"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMP_DIR="$(mktemp -d)"
-ZIP_URL="${DECKTATION_ZIP_URL:-https://silverfoxy.github.io/decktation/releases/latest/decktation.zip}"
+ZIP_URL="${DECKTATION_ZIP_URL:-https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip}"
 LOCAL_ZIP="${DECKTATION_ZIP_PATH:-$SOURCE_DIR/build-output/decktation.zip}"
 ZIP_PATH="$TMP_DIR/decktation.zip"
 

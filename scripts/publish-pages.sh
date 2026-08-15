@@ -12,12 +12,6 @@ REF_NAME="${REF_NAME:-}"
 REF_TYPE="${REF_TYPE:-}"
 RELEASE_TAG="${RELEASE_TAG:-$REF_NAME}"
 PAGES_DIR=/tmp/decktation-gh-pages
-ZIP_SOURCE=build-output/decktation.zip
-
-if [ "$CLEANUP_ONLY" != "true" ] && [ ! -f "$ZIP_SOURCE" ]; then
-  echo "Missing build artifact: $ZIP_SOURCE" >&2
-  exit 1
-fi
 
 if [ "$CLEANUP_ONLY" != "true" ]; then
   : "${GITHUB_SHA:?GITHUB_SHA is required}"
@@ -139,12 +133,25 @@ write_download_page() {
 <body>
   <main>
     <h1>${title}</h1>
+EOF
+  if [ -n "$zip_url" ]; then
+    cat >>"$output_path" <<EOF
     <p>Decky Loader should use the direct ZIP URL below. This page is only a human-friendly landing page.</p>
     <div class="actions">
       <a class="button" href="${zip_url}">Download decktation.zip</a>
       <a class="button" href="${metadata_url}">View metadata</a>
     </div>
     <p><strong>Direct ZIP URL</strong><br><code>${zip_url}</code></p>
+EOF
+  else
+    cat >>"$output_path" <<EOF
+    <p>This reference is tracked here for visibility, but no public direct ZIP is published for it.</p>
+    <div class="actions">
+      <a class="button" href="${metadata_url}">View metadata</a>
+    </div>
+EOF
+  fi
+  cat >>"$output_path" <<EOF
     <p><a class="link" href="${PAGES_BASE_URL}/">Back to all Decktation downloads</a></p>
   </main>
 </body>
@@ -216,44 +223,45 @@ render_pages_content() {
     local branch_key
     branch_key="$(normalize_ref "$REF_NAME")"
     mkdir -p "$PAGES_DIR/branches/$branch_key"
-    cp "$ZIP_SOURCE" "$PAGES_DIR/branches/$branch_key/decktation.zip"
     write_metadata \
       "$PAGES_DIR/branches/$branch_key/metadata.json" \
       "branch" \
       "$REF_NAME" \
-      "$PAGES_BASE_URL/branches/$branch_key/decktation.zip"
+      ""
     write_download_page \
       "$PAGES_DIR/branches/$branch_key/index.html" \
       "Decktation branch build: $REF_NAME" \
-      "$PAGES_BASE_URL/branches/$branch_key/decktation.zip" \
+      "" \
       "$PAGES_BASE_URL/branches/$branch_key/metadata.json"
   fi
 
   cleanup_deleted_branch_dirs
 
   if [ "$CLEANUP_ONLY" != "true" ] && [ "$REF_TYPE" = "tag" ]; then
+    local release_zip_url
+    local latest_zip_url
+    release_zip_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/decktation.zip"
+    latest_zip_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/decktation.zip"
     mkdir -p "$PAGES_DIR/releases/$RELEASE_TAG" "$PAGES_DIR/releases/latest"
-    cp "$ZIP_SOURCE" "$PAGES_DIR/releases/$RELEASE_TAG/decktation.zip"
-    cp "$ZIP_SOURCE" "$PAGES_DIR/releases/latest/decktation.zip"
     write_metadata \
       "$PAGES_DIR/releases/$RELEASE_TAG/metadata.json" \
       "release" \
       "$RELEASE_TAG" \
-      "$PAGES_BASE_URL/releases/$RELEASE_TAG/decktation.zip"
+      "$release_zip_url"
     write_metadata \
       "$PAGES_DIR/releases/latest/metadata.json" \
       "release-latest" \
       "$RELEASE_TAG" \
-      "$PAGES_BASE_URL/releases/latest/decktation.zip"
+      "$latest_zip_url"
     write_download_page \
       "$PAGES_DIR/releases/$RELEASE_TAG/index.html" \
       "Decktation release build: $RELEASE_TAG" \
-      "$PAGES_BASE_URL/releases/$RELEASE_TAG/decktation.zip" \
+      "$release_zip_url" \
       "$PAGES_BASE_URL/releases/$RELEASE_TAG/metadata.json"
     write_download_page \
       "$PAGES_DIR/releases/latest/index.html" \
       "Decktation latest release" \
-      "$PAGES_BASE_URL/releases/latest/decktation.zip" \
+      "$latest_zip_url" \
       "$PAGES_BASE_URL/releases/latest/metadata.json"
   fi
 
@@ -344,11 +352,11 @@ render_pages_content() {
     <div class="hero">
       <div>
         <h1>Decktation Downloads</h1>
-        <p>Stable, direct ZIP URLs for Decky Loader installs. Use the ZIP URLs directly with Decky's <strong>Install Plugin from URL</strong> flow.</p>
+        <p>Stable release ZIP URLs for Decky Loader installs. Use the release ZIP URL directly with Decky's <strong>Install Plugin from URL</strong> flow.</p>
       </div>
       <div class="panel">
-        <p><strong>Latest release ZIP</strong><br><code>${PAGES_BASE_URL}/releases/latest/decktation.zip</code></p>
-        <p><strong>Branch ZIP pattern</strong><br><code>${PAGES_BASE_URL}/branches/&lt;url-encoded-branch-name&gt;/decktation.zip</code></p>
+        <p><strong>Latest release ZIP</strong><br><code>https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/decktation.zip</code></p>
+        <p><strong>Pages purpose</strong><br><code>metadata.json</code> and human-friendly release index only</p>
       </div>
     </div>
     $(render_index_list "$PAGES_DIR/releases" "Releases" "$PAGES_BASE_URL")

@@ -76,18 +76,6 @@ jobs:
           path: build-output/decktation.zip
           archive: false
 
-      - name: Publish Pages downloads
-        if: github.event_name != 'pull_request'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_SHA: ${{ github.sha }}
-          PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
-        run: bash scripts/publish-pages.sh
-
       - name: Upload release archive
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -105,6 +93,18 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+      - name: Publish Pages downloads
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: bash scripts/publish-pages.sh
 
   cleanup-pages:
     if: github.event_name == 'delete'
