@@ -49,9 +49,9 @@ The system has five main components:
 
 2. **Backend Plugin** (`main.py`) - Python Decky plugin backend. Uses static methods and class variables (Decky quirk). Spawns the controller listener subprocess and polls for button state. Provides RPC methods for button configuration (`get_button_config`, `set_button_config`) using array format.
 
-3. **Controller Listener** (`controller_listener.py`) - Separate Python process using the Steam Deck vendor raw HID interface to detect a configurable physical button combo. Reads configuration from `button_config.json` (array of 1-5 buttons). Writes button state to `/tmp/decktation_l5`. All buttons in the combo must be pressed simultaneously to activate, independent of the active Steam Input layout.
+3. **Controller Listener** (`runtime/src/decktation_runtime/controller_monitor.py`) - Runtime-owned helper process using the Steam Deck vendor raw HID interface to detect a configurable physical button combo. Reads configuration from `button_config.json` (array of 1-5 buttons). Writes button state to `/tmp/decktation_l5`. All buttons in the combo must be pressed simultaneously to activate, independent of the active Steam Input layout.
 
-4. **Voice Service** (`wow_voice_chat.py`) - Core audio processing. Records audio via sounddevice, transcribes with faster-whisper (base model, int8, CPU), parses chat channel prefixes, types output via ydotool.
+4. **Voice Service** (`runtime/src/decktation_runtime/voice_service.py`) - Core audio processing. Records audio via Pulse/PipeWire capture, transcribes with faster-whisper (base model, int8, CPU), parses chat channel prefixes, types output via ydotool.
 
 5. **WoW Addon** (`WowAddon/DecktationContext/`) - Lua addon that exports game state (zone, target, party members, class/spec) to SavedVariables every 2 seconds. The `convert_wow_context.py` script watches and converts this to `wow_context.json` for the voice service.
 
@@ -59,7 +59,7 @@ The system has five main components:
 ```
 User adds/removes buttons in UI → set_button_config RPC → button_config.json
     ↓
-Button Combo (1-5 buttons, raw HID) → controller_listener.py reads config
+Button Combo (1-5 buttons, raw HID) → controller_monitor.py reads config
     ↓
 All buttons pressed? → Button state → /tmp/decktation_l5
     ↓
@@ -79,9 +79,9 @@ Voice input like "party, hello everyone" or "raid: pull boss" is parsed to extra
 
 - `src/index.tsx` - Plugin UI with button configuration dropdowns, status polling, manual test button
 - `main.py` - Plugin lifecycle, spawns controller listener, polls button state, RPC endpoints for config
-- `controller_listener.py` - Standalone raw HID process for configurable button combo detection
+- `runtime/src/decktation_runtime/controller_monitor.py` - Raw HID process for configurable button combo detection
 - `button_config.json` - User's button configuration (created on first config change)
-- `wow_voice_chat.py` - Whisper model, audio recording, transcription, ydotool output
+- `runtime/src/decktation_runtime/voice_service.py` - Whisper model, audio recording, transcription, ydotool output
 - `convert_wow_context.py` - Lua SavedVariables parser with `--watch` mode
 - `WowAddon/DecktationContext/DecktationContext.lua` - WoW addon for game context
 

@@ -60,9 +60,8 @@ runtime/
 
 ## Compatibility strategy in PR 1
 
-- `wow_voice_chat.py`, `controller_listener.py`, and `deck_hid.py` remain at
-  the repository root as import-compatible shims.
-- Tests and helper scripts can continue importing those legacy module names.
+- `wow_voice_chat.py`, `controller_listener.py`, and `deck_hid.py` initially
+  remained at the repository root as import-compatible shims.
 - The actual implementation now lives in `runtime/src/decktation_runtime/`.
 - `main.py` remained untouched in this pass so plugin behavior was preserved.
 
@@ -258,6 +257,14 @@ decktation/
     decktation-runtime
     licenses/
 ```
+
+Follow-up cleanup completed after PR 5:
+
+- deleted `wow_voice_chat.py`
+- deleted `controller_listener.py`
+- deleted `deck_hid.py`
+- deleted `runtime_bootstrap.py`
+- tests and developer docs now import `decktation_runtime.*` directly
 
 The remaining packaging work is validation rather than architecture:
 

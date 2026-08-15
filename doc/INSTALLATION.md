@@ -235,11 +235,7 @@ grep ydotoold /tmp/decktation.log
 1. Speak clearly and at moderate pace
 2. Use a headset microphone for better quality
 3. Add context for specialized terms (see WoW integration)
-4. Consider upgrading to larger model (edit `wow_voice_chat.py` line 28):
-   ```python
-   # Change from "base" to "small" for better accuracy
-   self.model = WhisperModel("small", device="cpu", compute_type="int8")
-   ```
+4. Consider switching to the `small` model from the plugin UI for better accuracy.
 
 ### Issue: Plugin is slow or laggy
 
@@ -249,11 +245,7 @@ grep ydotoold /tmp/decktation.log
 - Long recordings
 
 **Solutions:**
-1. Use smaller model for speed (edit `wow_voice_chat.py`):
-   ```python
-   # Change to "tiny" for faster processing
-   self.model = WhisperModel("tiny", device="cpu", compute_type="int8")
-   ```
+1. Use the plugin UI model selector to choose a smaller model for speed.
 2. Keep recordings short (< 5 seconds)
 3. Close other demanding apps
 
@@ -276,12 +268,13 @@ uninstalls Decktation. No system service or package remains behind.
 
 ### Change Whisper Model
 
-Edit `~/homebrew/plugins/decktation/wow_voice_chat.py` line ~28:
+Change the model from the plugin UI, or update the stored setting in
+`~/homebrew/settings/decktation/button_config.json`:
 
-```python
-# Options: "tiny", "base", "small", "medium", "large"
-# Larger = more accurate but slower
-self.model = WhisperModel("base", device="cpu", compute_type="int8")
+```json
+{
+  "modelSize": "base"
+}
 ```
 
 ### Add Custom Context
@@ -307,7 +300,7 @@ tail -f /tmp/decktation.log
 tail -f /tmp/decky*.log
 
 # Controller listener logs (via plugin log)
-grep "controller_listener" /tmp/decktation.log
+grep -- "--controller-monitor" /tmp/decktation.log
 ```
 
 ## Getting Help

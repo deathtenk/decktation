@@ -10,13 +10,13 @@ Use the `--channel` flag to set which chat channel to use by default:
 
 ```bash
 # Send everything to party chat
-python wow_voice_chat.py --channel party --mode once --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel party --mode once --duration 5
 
 # Send everything to raid chat
-python wow_voice_chat.py --channel raid --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel raid --mode push-to-talk
 
 # Send everything to guild chat
-python wow_voice_chat.py --channel guild --mode once
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel guild --mode once
 ```
 
 ### Method 2: Voice Prefix (Recommended!)
@@ -24,7 +24,7 @@ python wow_voice_chat.py --channel guild --mode once
 Say the channel name before your message:
 
 ```bash
-python wow_voice_chat.py --mode once --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 5
 ```
 
 **Then say:**
@@ -40,7 +40,7 @@ The service will automatically detect the channel and send to the right place!
 Use `--channel auto` to automatically choose based on your group:
 
 ```bash
-python wow_voice_chat.py --channel auto --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel auto --mode push-to-talk
 ```
 
 **Auto-detection rules:**
@@ -68,7 +68,7 @@ You can still override by saying the channel name first!
 
 ```bash
 # Set default to raid
-python wow_voice_chat.py --channel raid --mode push-to-talk --ptt-key '`'
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel raid --mode push-to-talk --ptt-key '`'
 ```
 
 Now when you record:
@@ -80,7 +80,7 @@ Now when you record:
 
 ```bash
 # Auto-detect (will use party when in group)
-python wow_voice_chat.py --channel auto --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel auto --mode push-to-talk
 ```
 
 Recording:
@@ -91,7 +91,7 @@ Recording:
 
 ```bash
 # Default to say, but use voice prefixes to switch
-python wow_voice_chat.py --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode push-to-talk
 ```
 
 Recording different messages:
@@ -104,7 +104,7 @@ Recording different messages:
 
 ```bash
 # Set default to guild
-python wow_voice_chat.py --channel guild --mode continuous --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel guild --mode continuous --duration 5
 ```
 
 Everything goes to guild chat unless you specify otherwise.
@@ -150,7 +150,7 @@ You're running a Mythic+ with 4 friends:
 python convert_wow_context.py --watch
 
 # Terminal 2: Voice with auto-detection
-python wow_voice_chat.py --channel auto --context wow_context.json --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel auto --context wow_context.json --mode push-to-talk
 ```
 
 **Usage:**
@@ -164,7 +164,7 @@ python wow_voice_chat.py --channel auto --context wow_context.json --mode push-t
 You're in a 20-person raid:
 
 ```bash
-python wow_voice_chat.py --channel raid --context wow_context.json --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel raid --context wow_context.json --mode push-to-talk
 ```
 
 **Usage:**
@@ -178,7 +178,7 @@ python wow_voice_chat.py --channel raid --context wow_context.json --mode push-t
 You're questing alone but want to chat with guild:
 
 ```bash
-python wow_voice_chat.py --channel guild --mode once --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel guild --mode once --duration 5
 ```
 
 **Usage:**
@@ -193,7 +193,7 @@ Even with a default channel set, you can override per-message:
 
 ```bash
 # Default to party
-python wow_voice_chat.py --channel party --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel party --mode push-to-talk
 
 # But you can still say:
 # - "raid move to safe spot" → Goes to raid
@@ -206,7 +206,7 @@ python wow_voice_chat.py --channel party --mode push-to-talk
 Use `--channel auto` if you switch between solo, party, and raid frequently:
 
 ```bash
-python wow_voice_chat.py --channel auto --mode daemon
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel auto --mode daemon
 ```
 
 The service will automatically adjust based on your current group size.
@@ -226,7 +226,7 @@ This becomes second nature quickly!
 The service loads your WoW context, so:
 
 ```bash
-python wow_voice_chat.py --channel auto --context wow_context.json --mode push-to-talk
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel auto --context wow_context.json --mode push-to-talk
 ```
 
 Now it knows:
@@ -241,7 +241,7 @@ Now it knows:
 
 ```bash
 # Quick test
-python wow_voice_chat.py --mode once --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 5
 ```
 
 **Say:** "party this is a test"
@@ -258,7 +258,7 @@ Sending to party: this is a test
 # Test each channel
 for channel in say party raid guild; do
   echo "Testing $channel..."
-  python wow_voice_chat.py --mode once --duration 3 --channel $channel
+  PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 3 --channel $channel
   # Say something
 done
 ```
@@ -299,7 +299,7 @@ done
 For whispers, use the voice prefix format:
 
 ```bash
-python wow_voice_chat.py --mode once --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 5
 ```
 
 **Say:** "whisper PlayerName hey want to group?"
@@ -323,7 +323,7 @@ Note: You need to say the player name clearly for this to work!
 python convert_wow_context.py --watch &
 
 # Use auto-detection with voice overrides
-python wow_voice_chat.py --channel auto --context wow_context.json --mode push-to-talk --ptt-key '`'
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --channel auto --context wow_context.json --mode push-to-talk --ptt-key '`'
 ```
 
 This gives you:

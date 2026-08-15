@@ -179,12 +179,12 @@ See `doc/TESTING_GUIDE.md` for setup instructions.
 - Try a different button combination in the plugin UI
 - Rear grip buttons are supported on Steam Deck hardware through raw HID
 - Check `/tmp/decktation.log` for controller listener errors
-- Verify controller listener is running: `pgrep -f controller_listener`
+- Verify the runtime helper is running: `pgrep -f -- --controller-monitor`
 
 ### Performance on Steam Deck
 
 - Default `base` model is recommended (good balance)
-- For faster: use `tiny` model (edit wow_voice_chat.py line 28)
+- For faster: switch to a smaller model from the plugin UI
 - For accuracy: use `small` model (slower, needs more resources)
 
 ## Technical Details
@@ -195,8 +195,8 @@ See `doc/TESTING_GUIDE.md` for setup instructions.
 - **Controller input**: Steam Deck raw HID reports (independent of per-game Steam Input layouts)
 - **Output**: Keyboard simulation via ydotool (bundled)
 - **Game presets**: `defaults/game_presets.json` — data-driven, no code changes needed to add games
-- **Dependencies**: Pre-bundled Python 3.11 libraries in `lib/` folder
-- **Architecture**: TypeScript frontend + Python backend + separate controller listener process
+- **Dependencies**: Runtime dependencies locked in `runtime/uv.lock` and bundled into `bin/decktation-runtime`
+- **Architecture**: TypeScript frontend + Decky bridge + packaged runtime executable
 
 ## Development
 

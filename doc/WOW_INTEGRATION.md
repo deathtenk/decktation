@@ -10,7 +10,7 @@ The WoW integration consists of three components:
 
 1. **WoW Addon** (`WowAddon/DecktationContext/`) - Tracks in-game context
 2. **Conversion Script** (`convert_wow_context.py`) - Converts SavedVariables to JSON
-3. **Voice Service** (`wow_voice_chat.py`) - Uses context for better transcription
+3. **Voice Service** (`decktation_runtime.voice_service`) - Uses context for better transcription
 
 ## How It Works
 
@@ -31,7 +31,7 @@ The WoW integration consists of three components:
          ▼
 ┌─────────────────┐
 │  Voice Service  │  Uses context in transcription
-│ wow_voice_chat  │  Better accuracy for WoW terms
+│ decktation_runtime.voice_service │  Better accuracy for WoW terms
 └─────────────────┘
 ```
 
@@ -100,16 +100,16 @@ Now you can use the voice service with WoW context:
 
 ```bash
 # Run once (5 second recording)
-python wow_voice_chat.py --context wow_context.json --mode once
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode once
 
 # Continuous mode
-python wow_voice_chat.py --context wow_context.json --mode continuous
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode continuous
 
 # Push-to-talk mode
-python wow_voice_chat.py --context wow_context.json --mode push-to-talk --ptt-key '`'
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode push-to-talk --ptt-key '`'
 
 # Daemon mode (for Decky integration)
-python wow_voice_chat.py --context wow_context.json --mode daemon
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode daemon
 ```
 
 ## Recommended Workflow
@@ -125,7 +125,7 @@ python convert_wow_context.py --watch
 **Terminal 2: Run voice service**
 ```bash
 cd /home/deck/Documents/personal/decktation
-python wow_voice_chat.py --mode daemon
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode daemon
 ```
 
 The converter will automatically update `wow_context.json` whenever you zone, target enemies, or join/leave party.
@@ -221,7 +221,7 @@ python /home/deck/Documents/personal/decktation/convert_wow_context.py --watch &
 CONVERTER_PID=$!
 
 # Start voice service in daemon mode
-python /home/deck/Documents/personal/decktation/wow_voice_chat.py --mode daemon &
+PYTHONPATH=/home/deck/Documents/personal/decktation/runtime/src python3 -m decktation_runtime.voice_service --mode daemon &
 VOICE_PID=$!
 
 # Wait for WoW to close
@@ -285,7 +285,7 @@ If you want to use a different context file location:
 python convert_wow_context.py --output /custom/path/wow_context.json
 
 # Voice service
-python wow_voice_chat.py --context /custom/path/wow_context.json
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context /custom/path/wow_context.json
 ```
 
 ### Multiple WoW Accounts
@@ -346,7 +346,7 @@ Should show valid JSON with your current context.
 
 ```bash
 # Record a test
-python wow_voice_chat.py --mode once --duration 3
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 3
 
 # Say something like: "Let's go to Icecrown and fight the Lich King"
 ```
