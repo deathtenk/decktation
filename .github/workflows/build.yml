@@ -21,7 +21,7 @@ jobs:
       - run: node scripts/release-version.mjs check
       - run: pip install pytest sentry-sdk==2.66.0
       - run: pytest tests/ -v
-      - run: python -m py_compile main.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py
+      - run: python -m py_compile main.py runtime_client.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py runtime/runtime_entry.py runtime/src/decktation_runtime/*.py
 
   build:
     if: github.event_name != 'delete'
@@ -44,40 +44,37 @@ jobs:
             https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.7/decky-linux-x86_64
           chmod +x /tmp/decky-cli
 
+      - name: Prepare backend build context
+        run: bash backend/prepare-build-context.sh
+
+      - name: Build packaged runtime artifact
+        run: make runtime-build
+
+      - name: Validate packaged runtime artifact
+        run: |
+          test -x backend/out/decktation-runtime
+          test -f backend/out/lib/libportaudio.so.2
+          test -f backend/out/licenses/ydotool-AGPL-3.0.txt
+          test -f backend/out/licenses/portaudio-MIT.txt
+
       - name: Build marketplace artifact
         run: sudo /tmp/decky-cli plugin build -b -t /tmp/decktation-decky-build -o build-output -s directory .
 
       - name: Validate artifact
         run: |
           unzip -t build-output/decktation.zip
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/ydotoold'
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/faster_whisper'
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/sentry_sdk'
+          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/decktation-runtime'
           unzip -l build-output/decktation.zip | grep -q 'decktation/bin/lib/libportaudio.so.2'
           unzip -l build-output/decktation.zip | grep -q 'decktation/telemetry.py'
+          unzip -l build-output/decktation.zip | grep -q 'decktation/runtime_client.py'
           unzip -l build-output/decktation.zip | grep -q 'decktation/game_presets.json'
           unzip -l build-output/decktation.zip | grep -q 'decktation/channel_languages.json'
-          unzip -l build-output/decktation.zip | grep -q 'cpython-311'
-          ! unzip -l build-output/decktation.zip | grep -q 'cpython-313'
-          ! unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/av/'
 
       - name: Upload CI build as a direct file
         uses: actions/upload-artifact@v7
         with:
           path: build-output/decktation.zip
           archive: false
-
-      - name: Publish Pages downloads
-        if: github.event_name != 'pull_request'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_SHA: ${{ github.sha }}
-          PAGES_BASE_URL: https://silverfoxy.github.io/decktation
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
-        run: bash scripts/publish-pages.sh
 
       - name: Upload release archive
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
@@ -97,6 +94,18 @@ jobs:
           prerelease: false
           generate_release_notes: true
 
+      - name: Publish Pages downloads
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: bash scripts/publish-pages.sh
+
   cleanup-pages:
     if: github.event_name == 'delete'
     runs-on: ubuntu-latest
@@ -109,6 +118,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PAGES_BASE_URL: https://silverfoxy.github.io/decktation
+          PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
           CLEANUP_ONLY: "true"
         run: bash scripts/publish-pages.sh

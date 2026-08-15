@@ -9,8 +9,9 @@ version 1.0.4, built from commit
 - Build recipe: `backend/Dockerfile`
 - Packaged license: `bin/licenses/ydotool-AGPL-3.0.txt`
 
-The Python packages included under `bin/python` retain their package metadata,
-license classifiers, and license files as provided by their respective wheels.
+The packaged runtime executable `bin/decktation-runtime` embeds Python runtime
+dependencies resolved from `runtime/pyproject.toml` and locked by
+`runtime/uv.lock`.
 
 The store artifact also includes the unmodified SteamOS/Arch Linux PortAudio
 shared library used by `sounddevice`:

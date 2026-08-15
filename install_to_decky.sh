@@ -1,11 +1,9 @@
 #!/bin/bash
-# Fresh installation of Decktation to Decky
-set -e
+set -euo pipefail
 
 echo "=== Fresh Decktation Installation ==="
 echo ""
 
-# Determine plugin directory
 if [ -d ~/homebrew/plugins ]; then
     PLUGINS_DIR=~/homebrew/plugins
 elif [ -d ~/.local/share/decky/plugins ]; then
@@ -17,131 +15,75 @@ fi
 
 PLUGIN_DIR="$PLUGINS_DIR/decktation"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+TMP_DIR="$(mktemp -d)"
+ZIP_URL="${DECKTATION_ZIP_URL:-https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip}"
+LOCAL_ZIP="${DECKTATION_ZIP_PATH:-$SOURCE_DIR/build-output/decktation.zip}"
+ZIP_PATH="$TMP_DIR/decktation.zip"
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
 
 echo "Source: $SOURCE_DIR"
 echo "Target: $PLUGIN_DIR"
 echo ""
 
-# Remove old installation if exists
 if [ -d "$PLUGIN_DIR" ]; then
     echo "Removing old installation..."
     rm -rf "$PLUGIN_DIR"
 fi
 
-# Create fresh plugin directory
-echo "Creating plugin directory..."
-mkdir -p "$PLUGIN_DIR"
-mkdir -p "$PLUGIN_DIR/dist"
-
-# Copy essential files only
-echo "Copying files..."
-cp "$SOURCE_DIR/main.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/controller_listener.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/deck_hid.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/telemetry.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/wow_voice_chat.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/convert_wow_context.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/defaults/game_presets.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/defaults/channel_languages.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/package.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/plugin.json" "$PLUGIN_DIR/"
-
-# Copy built frontend
-if [ ! -f "$SOURCE_DIR/dist/index.js" ]; then
-    echo "Building frontend..."
-    cd "$SOURCE_DIR"
-    npm run build
-    cd - > /dev/null
-fi
-cp "$SOURCE_DIR/dist/index.js" "$PLUGIN_DIR/dist/"
-
-# Copy WoW addon if exists
-if [ -d "$SOURCE_DIR/WowAddon" ]; then
-    echo "Copying WoW addon..."
-    cp -r "$SOURCE_DIR/WowAddon" "$PLUGIN_DIR/"
-fi
-
-# Copy bundled ydotool binaries if they exist
-if [ -d "$SOURCE_DIR/bin" ]; then
-    echo "Copying bundled ydotool binaries..."
-    cp -r "$SOURCE_DIR/bin" "$PLUGIN_DIR/"
+if [ -f "$LOCAL_ZIP" ]; then
+    echo "Using local packaged ZIP: $LOCAL_ZIP"
+    cp "$LOCAL_ZIP" "$ZIP_PATH"
 else
-    echo "Warning: No bundled ydotool binaries found in bin/"
-    echo "Run ./build_ydotool.sh to build them, or they will be downloaded from system"
+    echo "Downloading packaged ZIP:"
+    echo "  $ZIP_URL"
+    curl -fL "$ZIP_URL" -o "$ZIP_PATH"
 fi
+
+echo "Extracting packaged ZIP..."
+unzip -q "$ZIP_PATH" -d "$TMP_DIR/unpacked"
+
+EXTRACTED_PLUGIN_DIR="$TMP_DIR/unpacked/decktation"
+if [ ! -d "$EXTRACTED_PLUGIN_DIR" ]; then
+    echo "Error: packaged ZIP did not contain decktation/ at the archive root"
+    exit 1
+fi
+
+echo "Installing packaged plugin files..."
+mkdir -p "$PLUGIN_DIR"
+cp -R "$EXTRACTED_PLUGIN_DIR"/. "$PLUGIN_DIR/"
 
 echo "✓ Files copied"
 echo ""
 
-# Install Python dependencies
-echo "Installing Python dependencies..."
-echo "This may take a few minutes..."
-
-# Use the venv pip if available, otherwise try to find pip
-if [ -f "$SOURCE_DIR/venv/bin/pip" ]; then
-    PIP="$SOURCE_DIR/venv/bin/pip"
-elif [ -f "$SOURCE_DIR/.venv/bin/pip" ]; then
-    PIP="$SOURCE_DIR/.venv/bin/pip"
-elif command -v pip3 &> /dev/null; then
-    PIP="pip3"
-elif command -v pip &> /dev/null; then
-    PIP="pip"
-else
-    echo "Error: pip not found!"
-    echo "Creating a temporary venv..."
-    python3 -m venv /tmp/decktation_venv
-    PIP="/tmp/decktation_venv/bin/pip"
-fi
-
-echo "Using pip: $PIP"
-echo ""
-
-$PIP install --target "$PLUGIN_DIR/lib" \
-    av \
-    faster-whisper \
-    sounddevice \
-    numpy \
-    sentry-sdk==2.66.0
-
-echo "✓ Dependencies installed"
-echo ""
-
-# Set permissions
 echo "Setting permissions..."
-chmod 644 "$PLUGIN_DIR/main.py"
-chmod 644 "$PLUGIN_DIR/deck_hid.py"
-chmod 644 "$PLUGIN_DIR/telemetry.py"
-chmod 644 "$PLUGIN_DIR/wow_voice_chat.py"
-chmod 644 "$PLUGIN_DIR/convert_wow_context.py"
-chmod 755 "$PLUGIN_DIR/controller_listener.py"
-
+find "$PLUGIN_DIR" -type f -name '*.py' -exec chmod 644 {} +
+if [ -f "$PLUGIN_DIR/bin/decktation-runtime" ]; then
+    chmod 755 "$PLUGIN_DIR/bin/decktation-runtime"
+fi
 echo "✓ Permissions set"
 echo ""
 
-# Verify installation
 echo "Verifying installation..."
-if [ -d "$PLUGIN_DIR/lib/av" ]; then
-    echo "✓ av module installed"
+if [ -x "$PLUGIN_DIR/bin/decktation-runtime" ]; then
+    echo "✓ runtime executable installed"
 else
-    echo "✗ av module missing!"
-fi
-
-if [ -d "$PLUGIN_DIR/lib/faster_whisper" ]; then
-    echo "✓ faster-whisper installed"
-else
-    echo "✗ faster-whisper missing!"
-fi
-
-if [ -d "$PLUGIN_DIR/lib/sentry_sdk" ]; then
-    echo "✓ sentry-sdk installed"
-else
-    echo "✗ sentry-sdk missing!"
+    echo "✗ runtime executable missing!"
 fi
 
 if [ -f "$PLUGIN_DIR/dist/index.js" ]; then
     echo "✓ Frontend built"
 else
     echo "✗ Frontend missing!"
+fi
+
+if [ -f "$PLUGIN_DIR/plugin.json" ]; then
+    echo "✓ Plugin manifest installed"
+else
+    echo "✗ Plugin manifest missing!"
 fi
 
 echo ""

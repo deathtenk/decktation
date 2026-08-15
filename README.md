@@ -23,11 +23,9 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 > [!IMPORTANT]
 > Use a direct ZIP URL that points to the packaged plugin artifact.
 > Recommended stable URL:
-> **[`https://silverfoxy.github.io/decktation/releases/latest/decktation.zip`](https://silverfoxy.github.io/decktation/releases/latest/decktation.zip)**
-> Branch build URL pattern:
-> **`https://silverfoxy.github.io/decktation/branches/<url-encoded-branch-name>/decktation.zip`**
-> GitHub release assets also work:
-> **[`https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip`](https://github.com/silverfoxy/decktation/releases/latest/download/decktation.zip)**
+> **[`https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip`](https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip)**
+> Pages metadata index:
+> **[`https://silverfoxy.github.io/decktation/releases/latest/metadata.json`](https://silverfoxy.github.io/decktation/releases/latest/metadata.json)**
 >
 > Do **not** use GitHub's **Source code (zip)** or **Source code (tar.gz)** archives.
 > Those do not contain Decktation's bundled Python dependencies.
@@ -38,9 +36,6 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 2. Paste the direct ZIP URL above, or download `decktation.zip` first and then
    choose the file locally. Decky imports the archive and reloads the plugin
    automatically.
-
-For example, branch `feature/chat polish` becomes
-`feature%2Fchat%20polish` in the URL path.
 
 All dependencies and the private keyboard helper are pre-bundled in the
 release. No system packages or one-time `sudo` setup are required.
