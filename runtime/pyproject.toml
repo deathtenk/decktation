@@ -1,0 +1,13 @@
+[project]
+name = "decktation-runtime"
+version = "0.1.0"
+description = "Runtime package scaffold for Decktation's backend split"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+decktation-runtime = "decktation_runtime.server:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
