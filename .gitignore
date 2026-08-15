@@ -40,6 +40,9 @@ decktation-package/
 lib/
 bin/  # ydotool binaries built by build_ydotool.sh
 backend/out
+backend/defaults/
+backend/plugin.json
+backend/runtime/
 
 # User config
 .setup_status
