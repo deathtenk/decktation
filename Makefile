@@ -26,8 +26,9 @@ runtime-lock:
 runtime-build:
 	@set -eu; \
 	rm -rf backend/out; \
+	bash backend/prepare-build-context.sh; \
 	image_tag="decktation-runtime-build:local"; \
-	docker build --platform=linux/amd64 -t "$$image_tag" -f backend/Dockerfile .; \
+	docker build --platform=linux/amd64 -t "$$image_tag" -f backend/Dockerfile backend; \
 	container_id="$$(docker create "$$image_tag")"; \
 	trap 'docker rm -f "$$container_id" >/dev/null 2>&1 || true' EXIT; \
 	docker start -a "$$container_id" >/dev/null; \
