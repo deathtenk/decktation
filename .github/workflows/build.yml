@@ -44,6 +44,9 @@ jobs:
             https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.7/decky-linux-x86_64
           chmod +x /tmp/decky-cli
 
+      - name: Prepare backend build context
+        run: bash backend/prepare-build-context.sh
+
       - name: Build packaged runtime artifact
         run: make runtime-build
 
