@@ -50,16 +50,12 @@ jobs:
       - name: Validate artifact
         run: |
           unzip -t build-output/decktation.zip
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/ydotoold'
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/faster_whisper'
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/sentry_sdk'
+          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/decktation-runtime'
           unzip -l build-output/decktation.zip | grep -q 'decktation/bin/lib/libportaudio.so.2'
           unzip -l build-output/decktation.zip | grep -q 'decktation/telemetry.py'
+          unzip -l build-output/decktation.zip | grep -q 'decktation/runtime_client.py'
           unzip -l build-output/decktation.zip | grep -q 'decktation/game_presets.json'
           unzip -l build-output/decktation.zip | grep -q 'decktation/channel_languages.json'
-          unzip -l build-output/decktation.zip | grep -q 'cpython-311'
-          ! unzip -l build-output/decktation.zip | grep -q 'cpython-313'
-          ! unzip -l build-output/decktation.zip | grep -q 'decktation/bin/python/av/'
 
       - name: Upload CI build as a direct file
         uses: actions/upload-artifact@v7
