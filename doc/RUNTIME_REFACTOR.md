@@ -95,3 +95,42 @@ implemented in `main.py`:
 
 PR 1 does not change method behavior. It only creates the package and design
 foundation needed for later protocol work.
+
+## PR 2 protocol shape
+
+PR 2 introduces a source-runnable line-delimited JSON protocol over
+stdin/stdout.
+
+Requests:
+
+```json
+{"id":"req-1","method":"initialize","params":{"config_dir":"/tmp/decktation"}}
+```
+
+Success responses:
+
+```json
+{"id":"req-1","ok":true,"result":{"initialized":true,"protocol_version":1}}
+```
+
+Error responses:
+
+```json
+{"id":"req-1","ok":false,"error":{"code":"unknown_method","message":"Unknown method: foo"}}
+```
+
+Async events:
+
+```json
+{"event":"log","payload":{"message":"runtime server started","protocol_version":1}}
+```
+
+The initial server supports only:
+
+- `handshake`
+- `initialize`
+- `get_status`
+- `shutdown`
+
+This keeps PR 2 limited to protocol validation and server framing. Runtime
+ownership has not moved out of `main.py` yet.
