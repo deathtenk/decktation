@@ -1,26 +1,27 @@
 # Runtime Refactor Plan
 
-This document defines the target architecture for the backend split and the
-first migration pass landed in PR 1.
+This document defines the target architecture for the backend split and tracks
+the migration work that has landed so far.
 
 ## Goals
 
 - Preserve the current Decky/frontend API while refactoring the backend.
 - Move runtime-owned code into a dedicated Python package under `runtime/src/`.
 - Keep `main.py` as the long-term Decky bridge entrypoint.
-- Introduce a future runtime process boundary without switching to it yet.
+- Move the live plugin over to a runtime process boundary while preserving the
+  current frontend API.
 
 ## Current ownership
 
-Today `main.py` does three jobs:
+Before the refactor, `main.py` did three jobs:
 
 1. Decky plugin lifecycle and RPC surface.
 2. Runtime bootstrap and dependency-path mutation.
 3. Runtime orchestration for controller monitoring, transcription, and
    `ydotoold`.
 
-The first pass only changes source layout. It does not change the live
-execution model.
+That coupling has now been split incrementally across the migration steps
+below.
 
 ## Target ownership
 
@@ -63,9 +64,9 @@ runtime/
   the repository root as import-compatible shims.
 - Tests and helper scripts can continue importing those legacy module names.
 - The actual implementation now lives in `runtime/src/decktation_runtime/`.
-- `main.py` remains untouched in this pass so plugin behavior is preserved.
+- `main.py` remained untouched in this pass so plugin behavior was preserved.
 
-## Method inventory for later bridge work
+## Method inventory
 
 The future runtime command surface must cover the current Decky-facing methods
 implemented in `main.py`:
@@ -93,7 +94,7 @@ implemented in `main.py`:
 - `load_model`
 - `get_last_transcription`
 
-PR 1 does not change method behavior. It only creates the package and design
+PR 1 did not change method behavior. It only created the package and design
 foundation needed for later protocol work.
 
 ## PR 2 protocol shape
@@ -132,13 +133,13 @@ The initial server supports only:
 - `get_status`
 - `shutdown`
 
-This keeps PR 2 limited to protocol validation and server framing. Runtime
-ownership has not moved out of `main.py` yet.
+This kept PR 2 limited to protocol validation and server framing. Runtime
+ownership had not moved out of `main.py` yet.
 
 ## PR 3 request/response surface
 
-PR 3 completes the planned request/response method surface so the future
-host-side bridge can proxy the same API currently exposed by `main.py`.
+PR 3 completes the planned request/response method surface so the host-side
+bridge can proxy the same API currently exposed by `main.py`.
 
 Implemented request methods:
 
@@ -164,5 +165,61 @@ Implemented request methods:
 - `load_model`
 - `get_last_transcription`
 
-PR 3 still does not move controller monitoring or `ydotoold` ownership into the
-runtime. Those lifecycle responsibilities remain scheduled for PR 4.
+PR 3 still did not move controller monitoring or `ydotoold` ownership into the
+runtime. Those lifecycle responsibilities remained scheduled for PR 4.
+
+## PR 4 runtime ownership and bridge conversion
+
+PR 4 completed the remaining runtime-owned lifecycle work and switched
+`main.py` over to the runtime bridge.
+
+Changes landed in this phase:
+
+- `RuntimeBackend` now owns:
+  - controller-monitor process startup/shutdown
+  - controller button-state polling
+  - `ydotoold` startup/shutdown
+  - bundled PortAudio configuration for runtime audio dependencies
+- `decktation_runtime.server` supports `--controller-monitor` so the runtime
+  entrypoint can launch the controller helper process directly.
+- `runtime_client.py` was added as the host-side subprocess client for the
+  runtime.
+- `main.py` now:
+  - starts the runtime process
+  - sends `initialize`
+  - proxies Decky RPC calls over the JSON runtime protocol
+  - consumes runtime events for logging/diagnostics
+  - stops the runtime on unload/uninstall
+
+At this point, the intended architecture is live in source form:
+
+- `main.py`
+  - Decky lifecycle
+  - Decky RPC methods
+  - runtime subprocess supervision
+  - JSON request/response bridging
+- `runtime/src/decktation_runtime/`
+  - controller monitoring ownership
+  - audio/transcription ownership
+  - `ydotoold` lifecycle ownership
+  - runtime status/events
+
+## Current status
+
+The runtime split is functionally in place in source form.
+
+Completed:
+
+- source layout refactor into `runtime/src/decktation_runtime/`
+- JSON runtime protocol and source-runnable server
+- full request/response runtime API surface matching current Decky methods
+- runtime ownership of controller monitoring and `ydotoold`
+- `main.py` bridge conversion through `RuntimeClient`
+
+Remaining major work:
+
+- define runtime dependencies in `pyproject.toml`
+- generate and commit `uv.lock`
+- package the runtime as a Docker-built executable in `bin/`
+- update the install flow to copy the packaged runtime instead of installing
+  loose Python dependencies

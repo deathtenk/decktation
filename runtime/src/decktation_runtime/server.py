@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 import os
@@ -44,6 +45,7 @@ class RuntimeServer:
         self.stderr = stderr or sys.stderr
         self.state = RuntimeState()
         self.backend = backend or RuntimeBackend()
+        self.backend.log_callback = self.log
         self.handlers: dict[str, Callable[[dict], dict]] = {
             "handshake": self.handle_handshake,
             "initialize": self.handle_initialize,
@@ -220,6 +222,16 @@ class RuntimeServer:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--controller-monitor", action="store_true")
+    args, _ = parser.parse_known_args()
+
+    if args.controller_monitor:
+        from .controller_monitor import main as controller_monitor_main
+
+        controller_monitor_main()
+        return 0
+
     server = RuntimeServer()
     return server.serve_forever()
 

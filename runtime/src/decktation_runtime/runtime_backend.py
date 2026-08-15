@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
+import threading
+import time
 from typing import Any, Callable
+import ctypes.util
 
 from .config import DEFAULTS_DIR, PROJECT_ROOT
 
@@ -37,6 +43,12 @@ SUPPORTED_WHISPER_LANGUAGES = {
     "zh",
 }
 
+STATE_FILE = "/tmp/decktation_l5"
+PREVIEW_FILE = "/tmp/decktation_button_preview"
+PID_FILE = "/tmp/decktation_listener.pid"
+CONTROLLER_TYPE_FILE = "/tmp/decktation_controller_type"
+YDOTOOL_SOCKET = "/tmp/decktation-ydotool.sock"
+
 
 def normalize_transcription_language(language: str | None) -> str:
     language = (language or "auto").strip().lower()
@@ -61,7 +73,11 @@ class RuntimeContext:
     button_config_file: Path = PROJECT_ROOT / ".runtime-config" / "button_config.json"
     presets_file: Path = DEFAULTS_DIR / "game_presets.json"
     context_file: Path = PROJECT_ROOT / "wow_context.json"
-    preview_file: Path = Path("/tmp/decktation_button_preview")
+    preview_file: Path = Path(PREVIEW_FILE)
+    state_file: Path = Path(STATE_FILE)
+    pid_file: Path = Path(PID_FILE)
+    controller_type_file: Path = Path(CONTROLLER_TYPE_FILE)
+    ydotool_socket: Path = Path(YDOTOOL_SOCKET)
     plugin_version: str = "unknown"
     telemetry_enabled: bool = False
 
@@ -69,6 +85,7 @@ class RuntimeContext:
 @dataclass
 class RuntimeBackend:
     service_factory: Callable[..., Any] | None = None
+    enable_runtime_processes: bool = True
     controller_enabled: bool = False
     recording_start_count: int = 0
     active_preset: str = "wow"
@@ -76,6 +93,11 @@ class RuntimeBackend:
     runtime_context: RuntimeContext = field(default_factory=RuntimeContext)
     voice_service: Any | None = None
     presets: dict[str, dict] = field(default_factory=dict)
+    listener_process: Any | None = None
+    ydotoold_process: Any | None = None
+    poll_thread: threading.Thread | None = None
+    poll_running: bool = False
+    log_callback: Callable[..., None] | None = None
 
     def initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         plugin_dir = Path(params.get("plugin_dir") or self.runtime_context.plugin_dir)
@@ -95,6 +117,18 @@ class RuntimeBackend:
         preview_file = Path(
             params.get("preview_file") or self.runtime_context.preview_file
         )
+        state_file = Path(
+            params.get("state_file") or self.runtime_context.state_file
+        )
+        pid_file = Path(
+            params.get("pid_file") or self.runtime_context.pid_file
+        )
+        controller_type_file = Path(
+            params.get("controller_type_file") or self.runtime_context.controller_type_file
+        )
+        ydotool_socket = Path(
+            params.get("ydotool_socket") or self.runtime_context.ydotool_socket
+        )
         plugin_version = params.get("plugin_version", self.runtime_context.plugin_version)
         telemetry_enabled = bool(
             params.get("telemetry_enabled", self.runtime_context.telemetry_enabled)
@@ -108,14 +142,23 @@ class RuntimeBackend:
             presets_file=presets_file,
             context_file=context_file,
             preview_file=preview_file,
+            state_file=state_file,
+            pid_file=pid_file,
+            controller_type_file=controller_type_file,
+            ydotool_socket=ydotool_socket,
             plugin_version=plugin_version,
             telemetry_enabled=telemetry_enabled,
         )
+        self._configure_bundled_portaudio()
         self.presets = self._load_presets()
         config = self._read_button_config()
         self.controller_enabled = bool(config.get("enabled", False))
         self.active_preset = config.get("game", "wow")
         self.voice_service = self._create_voice_service(config)
+        if self.enable_runtime_processes:
+            self.start_ydotoold()
+            if self.start_controller_listener():
+                self.start_polling()
         return {
             "initialized": True,
             "config_keys": sorted(params.keys()),
@@ -178,6 +221,200 @@ class RuntimeBackend:
     def handshake(self, params: dict[str, Any]) -> dict[str, Any]:
         return {"runtime": "decktation-runtime"}
 
+    def _configure_bundled_portaudio(self) -> None:
+        bundled_portaudio = (
+            self.runtime_context.plugin_dir / "bin" / "lib" / "libportaudio.so.2"
+        )
+        if not bundled_portaudio.is_file():
+            return
+
+        system_find_library = ctypes.util.find_library
+
+        def find_bundled_library(name):
+            if name == "portaudio":
+                return str(bundled_portaudio)
+            return system_find_library(name)
+
+        ctypes.util.find_library = find_bundled_library
+
+    def _log(self, message: str, **payload) -> None:
+        if self.log_callback:
+            self.log_callback(message, **payload)
+
+    def _controller_command(self) -> list[str]:
+        if getattr(sys, "frozen", False):
+            return [sys.executable, "--controller-monitor"]
+        return [sys.executable, "-m", "decktation_runtime.server", "--controller-monitor"]
+
+    def _start_process_output_logger(self, process) -> None:
+        threading.Thread(
+            target=self._log_process_output,
+            args=(process,),
+            daemon=True,
+        ).start()
+
+    def _log_process_output(self, process) -> None:
+        try:
+            for line in process.stdout:
+                self._log("child process", line=line.rstrip())
+        except Exception as exc:  # pragma: no cover - defensive
+            self._log("child process logging stopped", error=str(exc))
+
+    def start_ydotoold(self) -> bool:
+        self.ydotoold_ready = False
+        ydotoold = self.runtime_context.plugin_dir / "bin" / "ydotoold"
+        if not ydotoold.is_file():
+            self._log("ydotoold missing", path=str(ydotoold))
+            return False
+
+        self.stop_ydotoold()
+        try:
+            self.ydotoold_process = subprocess.Popen(
+                [
+                    str(ydotoold),
+                    "--socket-path", str(self.runtime_context.ydotool_socket),
+                    "--socket-perm", "0600",
+                    "--mouse-off",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            self._start_process_output_logger(self.ydotoold_process)
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                if self.ydotoold_process.poll() is not None:
+                    self.ydotoold_process = None
+                    return False
+                if self.runtime_context.ydotool_socket.exists():
+                    self.ydotoold_ready = True
+                    return True
+                time.sleep(0.05)
+        except Exception as exc:  # pragma: no cover - defensive
+            self._log("failed to start ydotoold", error=str(exc))
+        self.stop_ydotoold()
+        return False
+
+    def stop_ydotoold(self) -> None:
+        self.ydotoold_ready = False
+        process = self.ydotoold_process
+        self.ydotoold_process = None
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=2)
+        try:
+            if self.runtime_context.ydotool_socket.exists():
+                self.runtime_context.ydotool_socket.unlink()
+        except OSError:
+            pass
+
+    def start_controller_listener(self) -> bool:
+        self.stop_controller_listener()
+        try:
+            self.listener_process = subprocess.Popen(
+                self._controller_command(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env={
+                    **os.environ,
+                    "DECKTATION_CONFIG_DIR": str(self.runtime_context.config_dir),
+                },
+            )
+            self._start_process_output_logger(self.listener_process)
+            time.sleep(0.5)
+            if self.listener_process.poll() is not None:
+                return False
+            return True
+        except Exception as exc:  # pragma: no cover - defensive
+            self._log("failed to start controller listener", error=str(exc))
+            return False
+
+    def stop_controller_listener(self) -> None:
+        pid_file = self.runtime_context.pid_file
+        try:
+            if pid_file.exists():
+                pid = int(pid_file.read_text().strip())
+                try:
+                    os.kill(pid, 9)
+                except OSError:
+                    pass
+        except Exception:
+            pass
+
+        if self.listener_process and self.listener_process.poll() is None:
+            self.listener_process.kill()
+        self.listener_process = None
+
+        for path in (
+            self.runtime_context.state_file,
+            self.runtime_context.preview_file,
+            self.runtime_context.pid_file,
+            self.runtime_context.controller_type_file,
+        ):
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                pass
+
+    def start_polling(self) -> None:
+        if self.poll_running:
+            return
+        self.poll_running = True
+        self.poll_thread = threading.Thread(
+            target=self.poll_button_state,
+            name="decktation-runtime-poll",
+            daemon=True,
+        )
+        self.poll_thread.start()
+
+    def stop_polling(self) -> None:
+        self.poll_running = False
+        if self.poll_thread:
+            self.poll_thread.join(timeout=2)
+            self.poll_thread = None
+
+    def poll_button_state(self) -> None:
+        last_state = False
+        health_check_counter = 0
+
+        while self.poll_running:
+            try:
+                if not self.controller_enabled or self.voice_service is None:
+                    time.sleep(0.1)
+                    continue
+
+                if self.runtime_context.state_file.exists():
+                    state = self.runtime_context.state_file.read_text().strip() == "1"
+                    if state and not last_state:
+                        if self.voice_service.pending_text:
+                            self.voice_service.cancel_pending()
+                        elif not self.voice_service.is_recording:
+                            self.voice_service.start_recording()
+                            self.recording_start_count += 1
+                    elif not state and last_state:
+                        if self.voice_service.is_recording:
+                            self.voice_service.stop_recording()
+                    last_state = state
+
+                health_check_counter += 1
+                if health_check_counter >= 20:
+                    health_check_counter = 0
+                    if self.listener_process and self.listener_process.poll() is not None:
+                        self._log("controller listener exited; restarting")
+                        if self.start_controller_listener():
+                            self._log("controller listener restarted")
+
+                time.sleep(0.05)
+            except Exception as exc:  # pragma: no cover - defensive
+                self._log("poll_button_state error", error=str(exc))
+                time.sleep(0.1)
+
     def get_status(self, params: dict[str, Any]) -> dict[str, Any]:
         service = self.voice_service
         model_ready = bool(service.is_model_ready()) if service else False
@@ -210,6 +447,11 @@ class RuntimeBackend:
         }
 
     def shutdown(self, params: dict[str, Any]) -> dict[str, Any]:
+        self.stop_polling()
+        self.stop_controller_listener()
+        self.stop_ydotoold()
+        if self.voice_service and getattr(self.voice_service, "is_recording", False):
+            self.voice_service.stop_recording(False)
         return {"shutdown": True, "initialized": self.voice_service is not None}
 
     def set_enabled(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -245,6 +487,9 @@ class RuntimeBackend:
         config["buttons"] = unique_buttons
         config["showNotifications"] = bool(params.get("showNotifications", True))
         self._write_button_config(config)
+        if self.enable_runtime_processes:
+            self.stop_controller_listener()
+            self.start_controller_listener()
         return {"success": True}
 
     def set_confirm_mode(self, params: dict[str, Any]) -> dict[str, Any]:
