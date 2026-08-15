@@ -68,6 +68,26 @@ decky plugin build -b -o build-output -s directory .
 # build-output/decktation.zip
 ```
 
+#### From a Steam Deck clone without Docker or `make`
+
+If you just want to install the latest packaged build on a Steam Deck, you do
+not need Docker or `make` on the device:
+
+```bash
+git clone https://github.com/silverfoxy/decktation.git
+cd decktation
+./install_to_decky.sh
+```
+
+The install script downloads the latest published `decktation.zip` from GitHub
+Pages unless a local packaged ZIP already exists at `build-output/decktation.zip`.
+
+To install from a different published ZIP, override the URL:
+
+```bash
+DECKTATION_ZIP_URL="https://<owner>.github.io/<repo>/releases/latest/decktation.zip" ./install_to_decky.sh
+```
+
 ## First Time Setup
 
 ### 1. Open the Plugin
@@ -82,7 +102,7 @@ decky plugin build -b -o build-output -s directory .
 On first open, the plugin will:
 
 1. Show "Initializing service..." (a few seconds)
-2. Dependencies are already installed in the packaged `bin/python/` folder
+2. The packaged runtime executable is already installed in `bin/decktation-runtime`
 3. Ready to use!
 
 ### 3. Load Whisper Model
@@ -163,7 +183,7 @@ systemctl --user restart plugin_loader
 ### Issue: "Service not initialized"
 
 **Possible causes:**
-- Python dependencies missing
+- Packaged runtime missing
 - Import errors in backend
 
 **Solutions:**
@@ -171,8 +191,8 @@ systemctl --user restart plugin_loader
 # Check Decktation logs
 tail -f /tmp/decktation.log
 
-# Verify packaged dependencies exist
-ls -la ~/homebrew/plugins/decktation/bin/python/faster_whisper/
+# Verify packaged runtime exists
+ls -la ~/homebrew/plugins/decktation/bin/decktation-runtime
 
 # Reinstall the release zip if packaged files are missing
 ```
@@ -181,18 +201,14 @@ ls -la ~/homebrew/plugins/decktation/bin/python/faster_whisper/
 
 **Possible causes:**
 - Button combo not detected
-- Controller listener not running
+- Runtime controller monitor not running
 - The bundled keyboard helper failed to start
 
 **Solutions:**
 ```bash
-# Check controller listener
-pgrep -f controller_listener
-# Should show a process ID
-
 # Check logs
 tail -f /tmp/decktation.log
-# Look for "Controller listener starting"
+# Look for runtime startup and controller-monitor events
 
 # Try a different button combo
 # Open plugin UI, change Button 1/Button 2

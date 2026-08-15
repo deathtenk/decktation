@@ -1,11 +1,9 @@
 #!/bin/bash
-# Fresh installation of Decktation to Decky
-set -e
+set -euo pipefail
 
 echo "=== Fresh Decktation Installation ==="
 echo ""
 
-# Determine plugin directory
 if [ -d ~/homebrew/plugins ]; then
     PLUGINS_DIR=~/homebrew/plugins
 elif [ -d ~/.local/share/decky/plugins ]; then
@@ -17,76 +15,58 @@ fi
 
 PLUGIN_DIR="$PLUGINS_DIR/decktation"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+TMP_DIR="$(mktemp -d)"
+ZIP_URL="${DECKTATION_ZIP_URL:-https://silverfoxy.github.io/decktation/releases/latest/decktation.zip}"
+LOCAL_ZIP="${DECKTATION_ZIP_PATH:-$SOURCE_DIR/build-output/decktation.zip}"
+ZIP_PATH="$TMP_DIR/decktation.zip"
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
 
 echo "Source: $SOURCE_DIR"
 echo "Target: $PLUGIN_DIR"
 echo ""
 
-# Remove old installation if exists
 if [ -d "$PLUGIN_DIR" ]; then
     echo "Removing old installation..."
     rm -rf "$PLUGIN_DIR"
 fi
 
-# Create fresh plugin directory
-echo "Creating plugin directory..."
+if [ -f "$LOCAL_ZIP" ]; then
+    echo "Using local packaged ZIP: $LOCAL_ZIP"
+    cp "$LOCAL_ZIP" "$ZIP_PATH"
+else
+    echo "Downloading packaged ZIP:"
+    echo "  $ZIP_URL"
+    curl -fL "$ZIP_URL" -o "$ZIP_PATH"
+fi
+
+echo "Extracting packaged ZIP..."
+unzip -q "$ZIP_PATH" -d "$TMP_DIR/unpacked"
+
+EXTRACTED_PLUGIN_DIR="$TMP_DIR/unpacked/decktation"
+if [ ! -d "$EXTRACTED_PLUGIN_DIR" ]; then
+    echo "Error: packaged ZIP did not contain decktation/ at the archive root"
+    exit 1
+fi
+
+echo "Installing packaged plugin files..."
 mkdir -p "$PLUGIN_DIR"
-mkdir -p "$PLUGIN_DIR/dist"
-mkdir -p "$PLUGIN_DIR/bin"
-
-# Copy essential files only
-echo "Copying files..."
-cp "$SOURCE_DIR/main.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/telemetry.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/convert_wow_context.py" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/defaults/game_presets.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/defaults/channel_languages.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/package.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/plugin.json" "$PLUGIN_DIR/"
-cp "$SOURCE_DIR/runtime_client.py" "$PLUGIN_DIR/"
-
-# Copy built frontend
-if [ ! -f "$SOURCE_DIR/dist/index.js" ]; then
-    echo "Building frontend..."
-    cd "$SOURCE_DIR"
-    npm run build
-    cd - > /dev/null
-fi
-cp "$SOURCE_DIR/dist/index.js" "$PLUGIN_DIR/dist/"
-
-# Copy WoW addon if exists
-if [ -d "$SOURCE_DIR/WowAddon" ]; then
-    echo "Copying WoW addon..."
-    cp -r "$SOURCE_DIR/WowAddon" "$PLUGIN_DIR/"
-fi
-
-# Build or copy the packaged runtime artifact
-if [ ! -x "$SOURCE_DIR/backend/out/decktation-runtime" ]; then
-    echo "Building packaged runtime..."
-    make -C "$SOURCE_DIR" runtime-build
-fi
-
-cp "$SOURCE_DIR/backend/out/decktation-runtime" "$PLUGIN_DIR/bin/"
-if [ -d "$SOURCE_DIR/backend/out/licenses" ]; then
-    mkdir -p "$PLUGIN_DIR/bin/licenses"
-    cp -r "$SOURCE_DIR/backend/out/licenses/." "$PLUGIN_DIR/bin/licenses/"
-fi
+cp -R "$EXTRACTED_PLUGIN_DIR"/. "$PLUGIN_DIR/"
 
 echo "✓ Files copied"
 echo ""
 
-# Set permissions
 echo "Setting permissions..."
-chmod 644 "$PLUGIN_DIR/main.py"
-chmod 644 "$PLUGIN_DIR/telemetry.py"
-chmod 644 "$PLUGIN_DIR/convert_wow_context.py"
-chmod 644 "$PLUGIN_DIR/runtime_client.py"
-chmod 755 "$PLUGIN_DIR/bin/decktation-runtime"
-
+find "$PLUGIN_DIR" -type f -name '*.py' -exec chmod 644 {} +
+if [ -f "$PLUGIN_DIR/bin/decktation-runtime" ]; then
+    chmod 755 "$PLUGIN_DIR/bin/decktation-runtime"
+fi
 echo "✓ Permissions set"
 echo ""
 
-# Verify installation
 echo "Verifying installation..."
 if [ -x "$PLUGIN_DIR/bin/decktation-runtime" ]; then
     echo "✓ runtime executable installed"
@@ -98,6 +78,12 @@ if [ -f "$PLUGIN_DIR/dist/index.js" ]; then
     echo "✓ Frontend built"
 else
     echo "✗ Frontend missing!"
+fi
+
+if [ -f "$PLUGIN_DIR/plugin.json" ]; then
+    echo "✓ Plugin manifest installed"
+else
+    echo "✗ Plugin manifest missing!"
 fi
 
 echo ""
