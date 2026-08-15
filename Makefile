@@ -1,7 +1,7 @@
 VERSION := $(shell node scripts/release-version.mjs print)
 TAG := v$(VERSION)
 
-.PHONY: version version-check version-set release-check release-tag
+.PHONY: version version-check version-set release-check release-tag runtime-lock runtime-build
 
 version:
 	@node scripts/release-version.mjs print
@@ -18,7 +18,22 @@ release-check: version-check
 	if [ -x venv/bin/pytest ]; then venv/bin/pytest tests/ -q; \
 	elif [ -x .venv/bin/pytest ]; then .venv/bin/pytest tests/ -q; \
 	else python -m pytest tests/ -q; fi
-	@python -m py_compile main.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py
+	@python -m py_compile main.py runtime_client.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py runtime/src/decktation_runtime/*.py
+
+runtime-lock:
+	@cd runtime && uv lock
+
+runtime-build:
+	@set -eu; \
+	rm -rf backend/out; \
+	image_tag="decktation-runtime-build:local"; \
+	docker build --platform=linux/amd64 -t "$$image_tag" -f backend/Dockerfile .; \
+	container_id="$$(docker create "$$image_tag")"; \
+	trap 'docker rm -f "$$container_id" >/dev/null 2>&1 || true' EXIT; \
+	docker start -a "$$container_id" >/dev/null; \
+	docker cp "$$container_id:/backend/out" backend/; \
+	docker rm -f "$$container_id" >/dev/null; \
+	trap - EXIT
 
 release-tag: release-check
 	@set -eu; \
