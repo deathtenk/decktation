@@ -21,7 +21,7 @@ jobs:
       - run: node scripts/release-version.mjs check
       - run: pip install pytest sentry-sdk==2.66.0
       - run: pytest tests/ -v
-      - run: python -m py_compile main.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py
+      - run: python -m py_compile main.py runtime_client.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py runtime/runtime_entry.py runtime/src/decktation_runtime/*.py
 
   build:
     if: github.event_name != 'delete'
@@ -43,6 +43,16 @@ jobs:
           curl -fL -o /tmp/decky-cli \
             https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.7/decky-linux-x86_64
           chmod +x /tmp/decky-cli
+
+      - name: Build packaged runtime artifact
+        run: make runtime-build
+
+      - name: Validate packaged runtime artifact
+        run: |
+          test -x backend/out/decktation-runtime
+          test -f backend/out/lib/libportaudio.so.2
+          test -f backend/out/licenses/ydotool-AGPL-3.0.txt
+          test -f backend/out/licenses/portaudio-MIT.txt
 
       - name: Build marketplace artifact
         run: sudo /tmp/decky-cli plugin build -b -t /tmp/decktation-decky-build -o build-output -s directory .
