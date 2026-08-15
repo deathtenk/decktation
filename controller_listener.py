@@ -36,11 +36,16 @@ STEAM_HID_INTERFACES = {
     # appeared as input1 and input2 across hid-steam/kernel versions.
     "0003:000028DE:00001102": ("/input2",),
     "0003:000028DE:00001142": ("/input1", "/input2"),
+    # Steam Controller Puck / newer wireless receiver.
+    "0003:000028DE:00001304": (
+        "/input2",
+    ),
 }
 STEAM_CONTROLLER_TYPES = {
     "0003:000028DE:00001205": "steam_deck",
     "0003:000028DE:00001102": "steam_controller_wired",
     "0003:000028DE:00001142": "steam_controller_wireless",
+    "0003:000028DE:00001304": "steam_controller_wireless",
 }
 
 def write_button_preview(name, pressed):

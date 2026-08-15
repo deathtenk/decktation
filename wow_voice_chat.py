@@ -15,6 +15,9 @@ from faster_whisper import WhisperModel
 import sounddevice as sd
 import numpy as np
 import wave
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class WoWVoiceChat:
@@ -53,6 +56,8 @@ class WoWVoiceChat:
         self.audio_queue = queue.Queue()
         self.is_recording = False
         self.recording_stream = None
+        self.recording_process = None
+        self.recording_thread = None
         self.recording_lock = threading.Lock()
 
         # Context cache
@@ -604,27 +609,107 @@ class WoWVoiceChat:
 
             self.is_recording = True
 
-            # TEST MODE: Skip actual recording
             if self.test_mode:
                 print(f"[TEST MODE] Recording started (will use {self.test_audio_file})")
                 return
 
-            print("Recording started...")
+            logger.info("Recording started")
             self.audio_queue = queue.Queue()
 
-            # Get default sample rate from device
-            device_info = sd.query_devices(sd.default.device[0], 'input')
-            self.sample_rate = int(device_info['default_samplerate'])
-            print(f"Using sample rate: {self.sample_rate}")
+            # Record directly at Whisper's native sample rate.
+            self.sample_rate = self.whisper_sample_rate
 
-            # Start audio stream
-            self.recording_stream = sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=1,
-                callback=self.audio_callback,
-                dtype='int16'
+            # Decky launches plugin backends with a stripped environment.
+            # Reconstruct the minimum Pulse/PipeWire session environment.
+            uid = os.getuid()
+            env = os.environ.copy()
+            env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+            env["PULSE_SERVER"] = f"unix:/run/user/{uid}/pulse/native"
+            env.setdefault("HOME", "/home/deck")
+            env.setdefault("USER", "deck")
+
+            try:
+                # Ask Pulse/PipeWire for the current default microphone.
+                result = subprocess.run(
+                    ["/usr/bin/pactl", "get-default-source"],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=5,
+                )
+
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f"pactl get-default-source failed: {result.stderr.strip()}"
+                    )
+
+                source = result.stdout.strip()
+                if not source:
+                    raise RuntimeError("pactl returned an empty default source")
+
+                logger.info("Pulse/PipeWire default source: %s", source)
+
+                self.recording_process = subprocess.Popen(
+                    [
+                        "/usr/bin/parecord",
+                        f"--device={source}",
+                        "--raw",
+                        "--format=s16le",
+                        f"--rate={self.sample_rate}",
+                        "--channels=1",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=env,
+                )
+
+                logger.info(
+                    "parecord started: PID=%s source=%s rate=%s",
+                    self.recording_process.pid,
+                    source,
+                    self.sample_rate,
+                )
+
+            except Exception as e:
+                self.is_recording = False
+                logger.exception("Failed to start audio capture")
+                self._report_diagnostic("recording.failed", e)
+                return
+
+            def read_audio():
+                # 100 ms of mono signed 16-bit PCM.
+                chunk_size = self.sample_rate // 10 * 2
+                total_bytes = 0
+
+                try:
+                    while self.recording_process:
+                        data = self.recording_process.stdout.read(chunk_size)
+                        if not data:
+                            break
+
+                        total_bytes += len(data)
+                        samples = np.frombuffer(
+                            data,
+                            dtype=np.int16
+                        ).reshape(-1, 1)
+
+                        self.audio_queue.put(samples.copy())
+
+                except Exception:
+                    logger.exception("Error reading parecord audio")
+
+                finally:
+                    logger.info(
+                        "parecord reader finished after receiving %d bytes",
+                        total_bytes,
+                    )
+
+            self.recording_thread = threading.Thread(
+                target=read_audio,
+                name="decktation-audio-capture",
+                daemon=True,
             )
-            self.recording_stream.start()
+            self.recording_thread.start()
 
     def stop_recording(self, send=True):
         """Stop recording and process audio (for push-to-talk)"""
@@ -659,11 +744,39 @@ class WoWVoiceChat:
 
             print("Recording stopped...")
 
-            # Stop audio stream
-            if self.recording_stream:
-                self.recording_stream.stop()
-                self.recording_stream.close()
-                self.recording_stream = None
+            # Stop the PulseAudio/PipeWire capture process.
+            if self.recording_process:
+                process = self.recording_process
+
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        logger.warning("parecord did not terminate; killing it")
+                        process.kill()
+                        process.wait()
+
+            if self.recording_thread:
+                self.recording_thread.join(timeout=2)
+                self.recording_thread = None
+
+            if self.recording_process:
+                try:
+                    stderr = self.recording_process.stderr.read().decode(
+                        "utf-8",
+                        errors="replace",
+                    ).strip()
+                    if stderr:
+                        logger.info("parecord stderr: %s", stderr)
+                except Exception:
+                    logger.exception("Failed reading parecord stderr")
+
+                logger.info(
+                    "parecord exited with status %s",
+                    self.recording_process.returncode,
+                )
+                self.recording_process = None
 
             # Collect all audio
             audio_data = []
