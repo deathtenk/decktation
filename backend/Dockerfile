@@ -5,31 +5,23 @@ ARG YDOTOOL_COMMIT=57ba7d0af525e82da2de0e275d169477f293b197
 RUN pacman -Sydd --noconfirm --dbpath /var/lib/pacman \
         git portaudio python-pip
 
-COPY src/requirements.txt /tmp/decktation-requirements.txt
+RUN mkdir -p /backend
+COPY backend/entrypoint.sh /backend/entrypoint.sh
+RUN chmod 755 /backend/entrypoint.sh
 
-RUN mkdir -p /runtime/wheels /runtime/python \
-    && python3 -m pip download \
-        --no-cache-dir \
-        --no-deps \
-        --only-binary=:all: \
-        --dest=/runtime/wheels \
-        --implementation=cp \
-        --python-version=311 \
-        --abi=cp311 \
-        --platform=manylinux_2_28_x86_64 \
-        --platform=manylinux_2_27_x86_64 \
-        --platform=manylinux_2_17_x86_64 \
-        --platform=manylinux2014_x86_64 \
-        -r /tmp/decktation-requirements.txt \
-    && for wheel in /runtime/wheels/*.whl; do \
-        python3 -m zipfile -e "$wheel" /runtime/python; \
-    done \
-    && for data_dir in /runtime/python/*.data; do \
-        [ -d "$data_dir" ] || continue; \
-        [ ! -d "$data_dir/purelib" ] || cp -a "$data_dir/purelib/." /runtime/python/; \
-        [ ! -d "$data_dir/platlib" ] || cp -a "$data_dir/platlib/." /runtime/python/; \
-        rm -rf "$data_dir"; \
-    done
+WORKDIR /runtime-build
+
+COPY runtime/pyproject.toml runtime/uv.lock runtime/decktation-runtime.spec runtime/runtime_entry.py /runtime-build/runtime/
+
+RUN python3 -m venv /runtime-build/tooling-venv \
+    && /runtime-build/tooling-venv/bin/python -m pip install --no-cache-dir uv \
+    && cd /runtime-build/runtime \
+    && /runtime-build/tooling-venv/bin/uv sync --locked --python 3.11 --no-install-project \
+    && /runtime-build/tooling-venv/bin/uv pip install --python .venv/bin/python pyinstaller
+
+COPY runtime/src /runtime-build/runtime/src
+COPY defaults /runtime-build/defaults
+COPY plugin.json /runtime-build/plugin.json
 
 RUN git init /ydotool-src \
     && git -C /ydotool-src remote add origin https://github.com/ReimuNotMoe/ydotool.git \
@@ -46,5 +38,11 @@ RUN git init /ydotool-src \
         /ydotool-src/Client/tool_mousemove.c \
         /ydotool-src/Client/tool_type.c \
         /ydotool-src/Client/tool_key.c
+
+RUN cd /runtime-build/runtime \
+    && YDOTOOL_BIN=/ydotool-build/ydotool \
+       YDOTOOLD_BIN=/ydotool-build/ydotoold \
+       PORTAUDIO_LIB=/usr/lib/libportaudio.so.2 \
+       .venv/bin/pyinstaller decktation-runtime.spec
 
 ENTRYPOINT ["/backend/entrypoint.sh"]
