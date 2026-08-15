@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .config import BIN_DIR
+from .config import helper_binary_path
 
 
 YDOTOOL_SOCKET = "/tmp/decktation-ydotool.sock"
@@ -8,7 +8,7 @@ YDOTOOL_SOCKET = "/tmp/decktation-ydotool.sock"
 
 def candidate_paths():
     return [
-        BIN_DIR / "ydotool",
+        helper_binary_path("ydotool"),
         Path("/usr/bin/ydotool"),
         Path("/usr/local/bin/ydotool"),
     ]

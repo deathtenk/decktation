@@ -13,7 +13,7 @@ import time
 from typing import Any, Callable
 import ctypes.util
 
-from .config import DEFAULTS_DIR, PROJECT_ROOT
+from .config import DEFAULTS_DIR, PROJECT_ROOT, bundled_library_path, helper_binary_path
 
 
 DEFAULT_BUTTON_CONFIG = {
@@ -223,7 +223,7 @@ class RuntimeBackend:
 
     def _configure_bundled_portaudio(self) -> None:
         bundled_portaudio = (
-            self.runtime_context.plugin_dir / "bin" / "lib" / "libportaudio.so.2"
+            bundled_library_path("bin", "lib", "libportaudio.so.2")
         )
         if not bundled_portaudio.is_file():
             return
@@ -262,7 +262,7 @@ class RuntimeBackend:
 
     def start_ydotoold(self) -> bool:
         self.ydotoold_ready = False
-        ydotoold = self.runtime_context.plugin_dir / "bin" / "ydotoold"
+        ydotoold = helper_binary_path("ydotoold")
         if not ydotoold.is_file():
             self._log("ydotoold missing", path=str(ydotoold))
             return False

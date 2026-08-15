@@ -17,7 +17,8 @@ import numpy as np
 import wave
 import logging
 
-from .config import BIN_DIR, DEFAULTS_DIR
+from .config import DEFAULTS_DIR
+from .ydotool import candidate_paths
 
 logger = logging.getLogger(__name__)
 
@@ -494,14 +495,8 @@ class WoWVoiceChat:
         logger.info(f"Full message: {full_message}")
 
         # Find ydotool binary - check bundled first, then fallback to system paths
-        bundled_ydotool = os.path.join(str(BIN_DIR), "ydotool")
-
         # Try locations in priority order: bundled, system, user install
-        ydotool_paths = [
-            bundled_ydotool,
-            "/usr/bin/ydotool",
-            "/usr/local/bin/ydotool",
-        ]
+        ydotool_paths = [str(path) for path in candidate_paths()]
 
         ydotool = None
         for path in ydotool_paths:
