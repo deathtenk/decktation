@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 import os
@@ -220,6 +221,16 @@ class RuntimeServer:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--controller-monitor", action="store_true")
+    args, _ = parser.parse_known_args()
+
+    if args.controller_monitor:
+        from .controller_monitor import main as controller_monitor_main
+
+        controller_monitor_main()
+        return 0
+
     server = RuntimeServer()
     return server.serve_forever()
 
