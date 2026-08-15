@@ -2,7 +2,7 @@
   "plugin": "Decktation",
   "channel": "branch",
   "ref": "packaging",
-  "commit": "a08062614d0862348f13ddcbc922759a2c0ca18b",
+  "commit": "81dbf474a631eb16320259fc7b0b1368c1f92f4d",
   "zip_url": "",
-  "generated_at": "2026-08-15T21:57:32Z"
+  "generated_at": "2026-08-15T21:58:16Z"
 }
