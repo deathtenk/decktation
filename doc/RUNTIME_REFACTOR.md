@@ -134,3 +134,35 @@ The initial server supports only:
 
 This keeps PR 2 limited to protocol validation and server framing. Runtime
 ownership has not moved out of `main.py` yet.
+
+## PR 3 request/response surface
+
+PR 3 completes the planned request/response method surface so the future
+host-side bridge can proxy the same API currently exposed by `main.py`.
+
+Implemented request methods:
+
+- `handshake`
+- `initialize`
+- `get_status`
+- `shutdown`
+- `set_enabled`
+- `get_button_config`
+- `set_share_diagnostics`
+- `set_button_config`
+- `set_confirm_mode`
+- `set_manual_send`
+- `set_transcription_options`
+- `set_model_size`
+- `get_presets`
+- `get_active_preset`
+- `set_active_preset`
+- `start_recording`
+- `stop_recording`
+- `is_recording`
+- `update_context`
+- `load_model`
+- `get_last_transcription`
+
+PR 3 still does not move controller monitoring or `ydotoold` ownership into the
+runtime. Those lifecycle responsibilities remain scheduled for PR 4.
