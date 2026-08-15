@@ -8,7 +8,7 @@ and game_presets.json structural validity.
 import json
 import os
 import pytest
-from wow_voice_chat import WoWVoiceChat
+from decktation_runtime.voice_service import WoWVoiceChat
 
 
 PRESETS_FILE = os.path.join(os.path.dirname(__file__), "..", "defaults", "game_presets.json")

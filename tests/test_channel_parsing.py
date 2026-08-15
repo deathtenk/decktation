@@ -6,7 +6,7 @@ messages silently land in the wrong chat channel in-game.
 """
 
 import pytest
-from wow_voice_chat import WoWVoiceChat
+from decktation_runtime.voice_service import WoWVoiceChat
 
 
 WOW_PRESET = {
