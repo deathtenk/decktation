@@ -3,8 +3,8 @@
 
 import time
 
-from controller_listener import find_steam_deck_hidraw
-from deck_hid import STEAM_DECK_BUTTON_BITS, raw_button_states
+from decktation_runtime.controller_monitor import find_steam_deck_hidraw
+from decktation_runtime.hid import STEAM_DECK_BUTTON_BITS, raw_button_states
 
 
 def main():
