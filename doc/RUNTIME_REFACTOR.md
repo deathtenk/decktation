@@ -218,8 +218,49 @@ Completed:
 
 Remaining major work:
 
-- define runtime dependencies in `pyproject.toml`
-- generate and commit `uv.lock`
-- package the runtime as a Docker-built executable in `bin/`
-- update the install flow to copy the packaged runtime instead of installing
-  loose Python dependencies
+- validate the Docker-built runtime artifact on target SteamOS hardware
+- finalize any packaging fixes discovered during that artifact validation
+
+## PR 5 packaging strategy
+
+PR 5 moves the project from loose Python dependency installation to a locked
+runtime package and Docker-built executable artifact.
+
+Changes landed in this phase:
+
+- `runtime/pyproject.toml` is now the source of truth for runtime dependencies.
+- `runtime/uv.lock` freezes the runtime dependency tree.
+- `runtime/decktation-runtime.spec` defines a one-file PyInstaller build for
+  `decktation-runtime`.
+- `backend/Dockerfile` now:
+  - installs `uv`
+  - resolves the runtime environment from `uv.lock`
+  - builds `ydotool` / `ydotoold`
+  - bundles helper binaries and PortAudio into the runtime executable
+- `backend/entrypoint.sh` now exports `backend/out/decktation-runtime` instead
+  of an expanded `out/python/` tree.
+- `install_to_decky.sh` now installs the packaged runtime executable from
+  `backend/out/decktation-runtime`.
+- `Makefile` now includes:
+  - `runtime-lock`
+  - `runtime-build`
+
+The intended packaged layout is now:
+
+```text
+decktation/
+  main.py
+  runtime_client.py
+  plugin.json
+  dist/index.js
+  defaults/
+  bin/
+    decktation-runtime
+    licenses/
+```
+
+The remaining packaging work is validation rather than architecture:
+
+- confirm the Docker build completes in the target environment
+- confirm the packaged executable resolves bundled libraries correctly
+- confirm the Decky install path works without source-tree fallbacks
