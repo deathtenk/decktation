@@ -45,6 +45,7 @@ class RuntimeServer:
         self.stderr = stderr or sys.stderr
         self.state = RuntimeState()
         self.backend = backend or RuntimeBackend()
+        self.backend.log_callback = self.log
         self.handlers: dict[str, Callable[[dict], dict]] = {
             "handshake": self.handle_handshake,
             "initialize": self.handle_initialize,

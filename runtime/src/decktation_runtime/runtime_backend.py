@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 from typing import Any, Callable
+import ctypes.util
 
 from .config import DEFAULTS_DIR, PROJECT_ROOT
 
@@ -148,6 +149,7 @@ class RuntimeBackend:
             plugin_version=plugin_version,
             telemetry_enabled=telemetry_enabled,
         )
+        self._configure_bundled_portaudio()
         self.presets = self._load_presets()
         config = self._read_button_config()
         self.controller_enabled = bool(config.get("enabled", False))
@@ -218,6 +220,22 @@ class RuntimeBackend:
 
     def handshake(self, params: dict[str, Any]) -> dict[str, Any]:
         return {"runtime": "decktation-runtime"}
+
+    def _configure_bundled_portaudio(self) -> None:
+        bundled_portaudio = (
+            self.runtime_context.plugin_dir / "bin" / "lib" / "libportaudio.so.2"
+        )
+        if not bundled_portaudio.is_file():
+            return
+
+        system_find_library = ctypes.util.find_library
+
+        def find_bundled_library(name):
+            if name == "portaudio":
+                return str(bundled_portaudio)
+            return system_find_library(name)
+
+        ctypes.util.find_library = find_bundled_library
 
     def _log(self, message: str, **payload) -> None:
         if self.log_callback:
