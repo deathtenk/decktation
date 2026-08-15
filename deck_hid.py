@@ -23,6 +23,13 @@ STEAM_DECK_BUTTON_BITS = {
     "R4": (13, 2),
 }
 
+STEAM_CONTROLLER_2026_REPORT_SIZE = 54
+STEAM_CONTROLLER_2026_REPORT_ID = 0x42
+STEAM_CONTROLLER_2026_BUTTON_BITS = {
+    "L1": (4, 3),
+    "R1": (3, 1),
+}
+
 # The Deck also reports uncalibrated 16-bit analog trigger values.  Preserve
 # Decktation's previous half-pull behavior instead of requiring the digital
 # "fully pressed" bit above.
@@ -56,6 +63,14 @@ def raw_button_states(report):
     Short reports are ignored because they may be feature/status reports from
     the same HID interface rather than a complete controller-state report.
     """
+    if (
+        len(report) == STEAM_CONTROLLER_2026_REPORT_SIZE
+        and report[0] == STEAM_CONTROLLER_2026_REPORT_ID
+    ):
+        return {
+            name: bool(report[byte] & (1 << bit))
+            for name, (byte, bit) in STEAM_CONTROLLER_2026_BUTTON_BITS.items()
+        }
     if (
         len(report) != STEAM_DECK_REPORT_SIZE
         or report[0] != 1
