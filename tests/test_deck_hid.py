@@ -1,4 +1,4 @@
-from deck_hid import (
+from decktation_runtime.hid import (
     STEAM_CONTROLLER_BUTTON_BITS,
     STEAM_DECK_BUTTON_BITS,
     raw_button_states,

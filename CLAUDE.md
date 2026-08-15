@@ -12,9 +12,12 @@ Decktation is a push-to-talk dictation plugin for Steam Deck that enables voice-
 npm install           # Install Node dependencies (package-lock.json is ignored)
 npm run build         # Compile TypeScript to dist/index.js
 npm run watch         # Watch mode for development
+make runtime-lock     # Refresh runtime/uv.lock from runtime/pyproject.toml
+make runtime-build    # Build backend/out/decktation-runtime via Docker
 ```
 
-Python dependencies are installed via `install_deps.sh` using the venv pip, which installs faster-whisper, sounddevice, and numpy to the `lib/` folder.
+Runtime dependencies are defined in `runtime/pyproject.toml`, frozen in
+`runtime/uv.lock`, and bundled into the packaged runtime executable.
 
 ## Testing
 
@@ -27,10 +30,8 @@ Python dependencies are installed via `install_deps.sh` using the venv pip, whic
 .venv/bin/pip install pytest
 
 # Manual/integration tests
-python test_voice.py           # Test transcription
-python test_xdotool.py         # Test keyboard simulation
-python test_context_benefit.py # Test context improvement
-./test_wow_integration.sh      # Full WoW addon integration test
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 3
+python convert_wow_context.py --watch
 ```
 
 ### Unit test coverage (`tests/`)
@@ -47,11 +48,11 @@ The system has five main components:
 
 1. **Frontend Plugin** (`src/index.tsx`) - React/TypeScript Decky Loader plugin UI. Provides toggle to enable dictation, dynamic button configuration (1-5 buttons), status display, and manual test button. Hybrid UI shows dropdowns for each button with add/remove controls. Note: Steam's frontend input APIs only work when Steam UI is active, so controller input is handled by the backend.
 
-2. **Backend Plugin** (`main.py`) - Python Decky plugin backend. Uses static methods and class variables (Decky quirk). Spawns the controller listener subprocess and polls for button state. Provides RPC methods for button configuration (`get_button_config`, `set_button_config`) using array format.
+2. **Backend Plugin** (`main.py`) - Python Decky plugin backend. Uses static methods and class variables (Decky quirk). Starts the packaged runtime process, proxies the Decky RPC surface, and owns runtime lifecycle.
 
-3. **Controller Listener** (`controller_listener.py`) - Separate Python process using the Steam Deck vendor raw HID interface to detect a configurable physical button combo. Reads configuration from `button_config.json` (array of 1-5 buttons). Writes button state to `/tmp/decktation_l5`. All buttons in the combo must be pressed simultaneously to activate, independent of the active Steam Input layout.
+3. **Controller Listener** (`runtime/src/decktation_runtime/controller_monitor.py`) - Runtime-owned helper process using the Steam Deck vendor raw HID interface to detect a configurable physical button combo. Reads configuration from `button_config.json` (array of 1-5 buttons). Writes button state to `/tmp/decktation_l5`. All buttons in the combo must be pressed simultaneously to activate, independent of the active Steam Input layout.
 
-4. **Voice Service** (`wow_voice_chat.py`) - Core audio processing. Records audio via sounddevice, transcribes with faster-whisper (base model, int8, CPU), parses chat channel prefixes, types output via ydotool.
+4. **Voice Service** (`runtime/src/decktation_runtime/voice_service.py`) - Core audio processing. Records audio via Pulse/PipeWire capture, transcribes with faster-whisper (base model, int8, CPU), parses chat channel prefixes, types output via ydotool.
 
 5. **WoW Addon** (`WowAddon/DecktationContext/`) - Lua addon that exports game state (zone, target, party members, class/spec) to SavedVariables every 2 seconds. The `convert_wow_context.py` script watches and converts this to `wow_context.json` for the voice service.
 
@@ -59,11 +60,11 @@ The system has five main components:
 ```
 User adds/removes buttons in UI → set_button_config RPC → button_config.json
     ↓
-Button Combo (1-5 buttons, raw HID) → controller_listener.py reads config
+Button Combo (1-5 buttons, raw HID) → controller_monitor.py reads config
     ↓
 All buttons pressed? → Button state → /tmp/decktation_l5
     ↓
-main.py polls file → WoWVoiceChat.start_recording()
+runtime_backend poller → voice_service.start_recording()
     ↓
 Audio Capture → Whisper Transcription
     ↓
@@ -78,10 +79,11 @@ Voice input like "party, hello everyone" or "raid: pull boss" is parsed to extra
 ## Key Files
 
 - `src/index.tsx` - Plugin UI with button configuration dropdowns, status polling, manual test button
-- `main.py` - Plugin lifecycle, spawns controller listener, polls button state, RPC endpoints for config
-- `controller_listener.py` - Standalone raw HID process for configurable button combo detection
+- `main.py` - Plugin lifecycle and runtime bridge RPC endpoints
+- `runtime_client.py` - Host-side subprocess client for `decktation-runtime`
+- `runtime/src/decktation_runtime/controller_monitor.py` - Raw HID process for configurable button combo detection
 - `button_config.json` - User's button configuration (created on first config change)
-- `wow_voice_chat.py` - Whisper model, audio recording, transcription, ydotool output
+- `runtime/src/decktation_runtime/voice_service.py` - Whisper model, audio recording, transcription, ydotool output
 - `convert_wow_context.py` - Lua SavedVariables parser with `--watch` mode
 - `WowAddon/DecktationContext/DecktationContext.lua` - WoW addon for game context
 
@@ -97,12 +99,12 @@ Voice input like "party, hello everyone" or "raid: pull boss" is parsed to extra
 ## Platform Notes
 
 - Designed for Steam Deck Linux environment (Gaming Mode)
-- Uses **ydotool** for keyboard simulation (requires ydotoold service running)
-- Setup ydotoold: `sudo /path/to/setup_ydotoold.sh` (creates systemd service with proper socket permissions)
+- Uses bundled **ydotool** plus a private runtime-managed `ydotoold` instance
 - All selectable built-in controls are decoded from the Steam Deck vendor raw HID interface
 - Per-game Steam Input layouts can emit XInput, keyboard, or mouse events without affecting combo detection
 - WoW runs via Proton; addon SavedVariables at `~/.steam/steam/steamapps/compatdata/*/pfx/drive_c/Program Files (x86)/World of Warcraft/_retail_/WTF/Account/<ACCOUNT>/SavedVariables/`
 - Plugin installs to `~/homebrew/plugins/decktation/`
+- Packaged runtime installs to `~/homebrew/plugins/decktation/bin/decktation-runtime`
 
 ## Known Issues
 

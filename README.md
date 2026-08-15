@@ -25,7 +25,7 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 > Recommended stable URL:
 > **[`https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip`](https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip)**
 > Pages metadata index:
-> **[`https://silverfoxy.github.io/decktation/releases/latest/metadata.json`](https://silverfoxy.github.io/decktation/releases/latest/metadata.json)**
+> **[`https://deathtenk.github.io/decktation/releases/latest/metadata.json`](https://deathtenk.github.io/decktation/releases/latest/metadata.json)**
 >
 > Do **not** use GitHub's **Source code (zip)** or **Source code (tar.gz)** archives.
 > Those do not contain Decktation's bundled Python dependencies.
@@ -39,6 +39,21 @@ Voice dictation plugin for Steam Deck using faster-whisper with context-aware tr
 
 All dependencies and the private keyboard helper are pre-bundled in the
 release. No system packages or one-time `sudo` setup are required.
+
+## Architecture
+
+Decktation now ships as a thin Decky bridge plus a packaged runtime:
+
+- `main.py`
+  Decky backend bridge. It owns the Decky lifecycle, exposes the frontend RPC
+  surface, starts the runtime process, and forwards JSON requests/responses.
+- `bin/decktation-runtime`
+  Packaged runtime executable. It owns controller monitoring, audio capture,
+  transcription, and the private `ydotoold` lifecycle.
+
+The runtime source of truth lives under `runtime/src/decktation_runtime/`.
+Runtime dependencies are defined in `runtime/pyproject.toml` and frozen in
+`runtime/uv.lock`.
 
 ## Usage
 
@@ -171,7 +186,7 @@ See `doc/TESTING_GUIDE.md` for setup instructions.
 
 - Ensure the plugin is enabled
 - Check that Steam Deck mic is working (test in another app)
-- Check `/tmp/decktation.log` for `ydotoold ready`
+- Check `/tmp/decktation.log` for runtime startup and `ydotoold ready`
 - Check logs: `/tmp/decktation.log`
 
 ### Button combo not detected
@@ -179,12 +194,12 @@ See `doc/TESTING_GUIDE.md` for setup instructions.
 - Try a different button combination in the plugin UI
 - Rear grip buttons are supported on Steam Deck hardware through raw HID
 - Check `/tmp/decktation.log` for controller listener errors
-- Verify controller listener is running: `pgrep -f controller_listener`
+- Verify the runtime helper is running: `pgrep -f -- --controller-monitor`
 
 ### Performance on Steam Deck
 
 - Default `base` model is recommended (good balance)
-- For faster: use `tiny` model (edit wow_voice_chat.py line 28)
+- For faster: switch to a smaller model from the plugin UI
 - For accuracy: use `small` model (slower, needs more resources)
 
 ## Technical Details
@@ -195,8 +210,8 @@ See `doc/TESTING_GUIDE.md` for setup instructions.
 - **Controller input**: Steam Deck raw HID reports (independent of per-game Steam Input layouts)
 - **Output**: Keyboard simulation via ydotool (bundled)
 - **Game presets**: `defaults/game_presets.json` — data-driven, no code changes needed to add games
-- **Dependencies**: Pre-bundled Python 3.11 libraries in `lib/` folder
-- **Architecture**: TypeScript frontend + Python backend + separate controller listener process
+- **Dependencies**: Runtime dependencies locked in `runtime/uv.lock` and bundled into `bin/decktation-runtime`
+- **Architecture**: TypeScript frontend + Decky bridge + packaged runtime executable
 
 ## Development
 
@@ -206,11 +221,20 @@ npm run build         # Compile TypeScript to dist/index.js
 npm run watch         # Watch mode for development
 
 # Unit tests (no hardware required)
-python3 -m venv .venv && .venv/bin/pip install pytest
+python3.11 -m venv .venv
+.venv/bin/pip install pytest
 .venv/bin/pytest tests/ -v
+
+# Lock runtime dependencies
+make runtime-lock
+
+# Build the packaged runtime locally (requires Docker)
+make runtime-build
 ```
 
-CI runs unit tests and the TypeScript build on every push via GitHub Actions.
+GitHub Actions builds release artifacts on tags and publishes `decktation.zip`
+to GitHub Releases. The Pages site publishes only metadata and download index
+pages; the ZIP itself is always served from Releases.
 
 ## Privacy
 

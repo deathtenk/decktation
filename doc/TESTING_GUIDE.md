@@ -118,8 +118,8 @@ Now test that the voice service loads and uses the context:
 **Test 1: Verify context loading**
 
 ```bash
-python3 << 'EOF'
-from wow_voice_chat import WoWVoiceChat
+PYTHONPATH=runtime/src python3 << 'EOF'
+from decktation_runtime.voice_service import WoWVoiceChat
 
 service = WoWVoiceChat(context_file="wow_context.json")
 service.load_context()
@@ -157,7 +157,7 @@ cat > wow_context_test.json << 'EOF'
 EOF
 
 # Test with voice service
-python wow_voice_chat.py --context wow_context_test.json --mode once --duration 3
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context_test.json --mode once --duration 3
 ```
 
 **During recording, say something WoW-related like:**
@@ -189,13 +189,13 @@ This will automatically update `wow_context.json` when the SavedVariables file c
 cd /home/deck/Documents/personal/decktation
 
 # Option A: Test once
-python wow_voice_chat.py --context wow_context.json --mode once --duration 5
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode once --duration 5
 
 # Option B: Push-to-talk mode (hold ` key to record)
-python wow_voice_chat.py --context wow_context.json --mode push-to-talk --ptt-key '`'
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode push-to-talk --ptt-key '`'
 
 # Option C: Daemon mode (for Decky integration)
-python wow_voice_chat.py --context wow_context.json --mode daemon
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context wow_context.json --mode daemon
 ```
 
 **Test the integration:**
@@ -261,7 +261,7 @@ Test that context updates as you play:
 1. Verify context file exists: `cat wow_context.json`
 2. Check the prompt being generated:
    ```python
-   from wow_voice_chat import WoWVoiceChat
+   from decktation_runtime.voice_service import WoWVoiceChat
    s = WoWVoiceChat(context_file="wow_context.json")
    s.load_context()
    print(s.build_prompt_from_context())
@@ -284,24 +284,17 @@ Test that context updates as you play:
    - Go to well-known zone (Orgrimmar, Stormwind)
    - Say the zone name
    - Should recognize it better
-5. **Increase model size** - Edit wow_voice_chat.py line 27:
-   ```python
-   # Change from "base" to "small" for better accuracy
-   self.model = WhisperModel("small", device="cpu", compute_type="int8")
-   ```
+5. **Increase model size** - Switch the plugin model selection to `small`.
 
 ### Performance issues
 
 **Problem:** Voice service is slow
 
 **Solutions:**
-1. **Use smaller model** - Edit wow_voice_chat.py:
-   ```python
-   self.model = WhisperModel("tiny", device="cpu", compute_type="int8")
-   ```
+1. **Use smaller model** - Switch the plugin model selection to a smaller model.
 2. **Reduce recording duration**:
    ```bash
-   python wow_voice_chat.py --duration 3  # Instead of 5
+   PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --duration 3  # Instead of 5
    ```
 3. **Check CPU usage:**
    ```bash
@@ -326,7 +319,7 @@ cat > test_raid.json << 'EOF'
 }
 EOF
 
-python wow_voice_chat.py --context test_raid.json --mode once --duration 3
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context test_raid.json --mode once --duration 3
 # Say: "Lich King is at 50 percent health"
 
 # Dungeon scenario
@@ -341,7 +334,7 @@ cat > test_dungeon.json << 'EOF'
 }
 EOF
 
-python wow_voice_chat.py --context test_dungeon.json --mode once --duration 3
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context test_dungeon.json --mode once --duration 3
 # Say: "Pull Stitchflesh when ready"
 ```
 
@@ -351,11 +344,11 @@ Compare with and without context:
 
 ```bash
 # Without context
-python wow_voice_chat.py --mode once --duration 3
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --mode once --duration 3
 # Say: "The Lich King"
 
 # With context
-python wow_voice_chat.py --context test_raid.json --mode once --duration 3
+PYTHONPATH=runtime/src python3 -m decktation_runtime.voice_service --context test_raid.json --mode once --duration 3
 # Say: "The Lich King"
 ```
 
@@ -379,7 +372,7 @@ Once testing works:
 1. **Set up automation** - Use systemd service or launch script
 2. **Integrate with Decky** - Use daemon mode for Steam Deck UI
 3. **Create keybinds** - Map controller buttons for push-to-talk
-4. **Fine-tune prompts** - Edit wow_voice_chat.py to add more WoW vocabulary
+4. **Fine-tune prompts** - Edit `defaults/game_presets.json` to add more WoW vocabulary
 
 ## Getting Help
 

@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-import wow_voice_chat
-from wow_voice_chat import WoWVoiceChat
+import decktation_runtime.voice_service as voice_service
+from decktation_runtime.voice_service import WoWVoiceChat
 
 
 class FakeNumpy:
@@ -55,7 +55,7 @@ class FakeAudio(list):
 
 
 def test_transcription_defaults_auto_detect_and_transcribe(monkeypatch):
-    monkeypatch.setattr(wow_voice_chat, "np", FakeNumpy)
+    monkeypatch.setattr(voice_service, "np", FakeNumpy)
     service = WoWVoiceChat(lazy_load=True)
     service.model = FakeModel()
     service._prepare_audio = lambda audio, sample_rate: FakeAudio([0.0, 0.1])
@@ -67,7 +67,7 @@ def test_transcription_defaults_auto_detect_and_transcribe(monkeypatch):
 
 
 def test_transcription_can_preselect_language(monkeypatch):
-    monkeypatch.setattr(wow_voice_chat, "np", FakeNumpy)
+    monkeypatch.setattr(voice_service, "np", FakeNumpy)
     service = WoWVoiceChat(
         lazy_load=True,
         transcription_language="fr",
@@ -82,7 +82,7 @@ def test_transcription_can_preselect_language(monkeypatch):
 
 
 def test_non_english_transcription_skips_english_prompt_bias(monkeypatch):
-    monkeypatch.setattr(wow_voice_chat, "np", FakeNumpy)
+    monkeypatch.setattr(voice_service, "np", FakeNumpy)
     service = WoWVoiceChat(
         lazy_load=True,
         transcription_language="fa",
@@ -103,7 +103,7 @@ def test_non_english_transcription_skips_english_prompt_bias(monkeypatch):
 
 def test_model_load_uses_selected_model_size(monkeypatch):
     fake_ctor = FakeWhisperCtor()
-    monkeypatch.setattr(wow_voice_chat, "WhisperModel", fake_ctor)
+    monkeypatch.setattr(voice_service, "WhisperModel", fake_ctor)
 
     service = WoWVoiceChat(lazy_load=True, model_size="small")
 
@@ -115,7 +115,7 @@ def test_model_load_uses_selected_model_size(monkeypatch):
 
 def test_set_model_size_reloads_loaded_model(monkeypatch):
     fake_ctor = FakeWhisperCtor()
-    monkeypatch.setattr(wow_voice_chat, "WhisperModel", fake_ctor)
+    monkeypatch.setattr(voice_service, "WhisperModel", fake_ctor)
 
     service = WoWVoiceChat(lazy_load=True, model_size="base")
 
@@ -138,6 +138,6 @@ def test_parecord_command_uses_low_latency_capture_settings():
         "--format=s16le",
         f"--rate={service.whisper_sample_rate}",
         "--channels=1",
-        f"--latency-msec={wow_voice_chat.PARECORD_LATENCY_MSEC}",
-        f"--process-time-msec={wow_voice_chat.PARECORD_PROCESS_TIME_MSEC}",
+        f"--latency-msec={voice_service.PARECORD_LATENCY_MSEC}",
+        f"--process-time-msec={voice_service.PARECORD_PROCESS_TIME_MSEC}",
     ]

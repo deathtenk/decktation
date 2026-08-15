@@ -10,7 +10,7 @@ Verifies that:
 import pytest
 import os
 from unittest.mock import patch, call, MagicMock
-from wow_voice_chat import WoWVoiceChat
+from decktation_runtime.voice_service import WoWVoiceChat
 
 
 # Linux keycode for Enter used by ydotool

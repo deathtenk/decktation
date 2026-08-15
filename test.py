@@ -1,6 +1,7 @@
 import sys
 
 sys.path.insert(0, ".")
+sys.path.insert(0, "./runtime/src")
 
 
 # Mock decky_plugin
@@ -15,7 +16,7 @@ import os
 os.environ["DECKY_PLUGIN_DIR"] = "."
 
 # Now test importing and initializing
-from wow_voice_chat import WoWVoiceChat
+from decktation_runtime.voice_service import WoWVoiceChat
 
 print("Creating WoWVoiceChat...")
 svc = WoWVoiceChat(context_file="wow_context.json")

@@ -5,20 +5,46 @@ the same build path used by the Decky Plugin Database. The store runs
 `decky plugin build -b` against the submitted repository commit. It does not
 run this repository's `.github/workflows/build.yml` first.
 
+## Current packaging model
+
+This repository now builds Decktation as a packaged runtime executable plus a
+thin Decky bridge:
+
+- `main.py` remains the Decky backend entrypoint.
+- `runtime/src/decktation_runtime/` contains the runtime source.
+- `runtime/pyproject.toml` and `runtime/uv.lock` define the locked runtime
+  dependency tree.
+- `backend/Dockerfile` builds `bin/decktation-runtime` plus bundled helper
+  files used by the packaged plugin.
+
 ## Completed in the repository
 
 - `plugin.json` declares Decky API version 1 and has release-safe flags.
 - Store metadata includes a public HTTPS image.
 - `package.json` contains the canonical plugin version.
 - A root MIT `LICENSE` is included.
-- Runtime Python dependencies are pinned in `backend/src/requirements.txt`.
-- Decky's Holo backend builds the Python runtime directory and ydotool 1.0.4.
+- Runtime Python dependencies are defined in `runtime/pyproject.toml` and
+  frozen in `runtime/uv.lock`.
+- Decky's Holo backend builds the packaged `decktation-runtime` executable and
+  ydotool 1.0.4.
 - The ydotool source revision, build recipe, and AGPL license are included.
 - The plugin owns a private `0600` ydotool socket and cleans up its process.
 - `_root` is declared for `/dev/uinput` and raw Steam Deck HID access.
 - A frozen `pnpm-lock.yaml` is committed for the marketplace frontend build.
 - Decky CLI 0.0.7 produces a valid 82.7 MB zip (274 MB installed).
 - Frontend source and the generated `dist/index.js` are present.
+
+## Release and artifact flow
+
+The repository now has two separate packaging concerns:
+
+- GitHub Releases
+  ship `decktation.zip` for direct installation and for `install_to_decky.sh`
+- Decky Plugin Database
+  rebuilds the plugin from repository contents using `decky plugin build -b`
+
+GitHub Pages is used only for lightweight metadata and download index pages. It
+is not the transport for the ZIP itself.
 
 ## Blocking work before submission
 
@@ -30,8 +56,8 @@ which Decky's builder copies into the packaged plugin's `bin/` directory.
 The Python extension ABI must also match every Decky/SteamOS channel claimed
 as supported. Loading CPython 3.11 or 3.13 extension modules into the other
 runtime is not compatible. Hardware-test the built artifact on each required
-channel. If their Python ABIs differ, move transcription into a self-contained
-worker executable and leave `main.py` as a thin Decky API bridge.
+channel. If their Python ABIs differ, keep transcription in the packaged
+runtime and leave `main.py` as a thin Decky API bridge.
 
 PortAudio is a dynamically linked third-party dependency used by
 `sounddevice`; answer **Yes** to the corresponding backend question in the

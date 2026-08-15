@@ -1,51 +1,49 @@
-# Runtime Refactor Plan
+# Runtime Architecture
 
-This document defines the target architecture for the backend split and tracks
-the migration work that has landed so far.
+This document describes Decktation's current backend architecture after the
+runtime split and packaging work.
 
 ## Goals
 
-- Preserve the current Decky/frontend API while refactoring the backend.
-- Move runtime-owned code into a dedicated Python package under `runtime/src/`.
-- Keep `main.py` as the long-term Decky bridge entrypoint.
-- Move the live plugin over to a runtime process boundary while preserving the
-  current frontend API.
+- Preserve the Decky/frontend API while isolating runtime concerns.
+- Keep `main.py` as the Decky backend entrypoint.
+- Move controller monitoring, audio capture, transcription, and `ydotoold`
+  lifecycle into a dedicated runtime process.
+- Build and distribute the runtime as a packaged executable with a locked
+  dependency tree.
 
-## Current ownership
+## Current split
 
-Before the refactor, `main.py` did three jobs:
-
-1. Decky plugin lifecycle and RPC surface.
-2. Runtime bootstrap and dependency-path mutation.
-3. Runtime orchestration for controller monitoring, transcription, and
-   `ydotoold`.
-
-That coupling has now been split incrementally across the migration steps
-below.
-
-## Target ownership
-
-The intended split is:
+The plugin now runs as two cooperating layers:
 
 - `main.py`
-  - Decky lifecycle
+  - Decky lifecycle hooks
   - Decky RPC methods
-  - runtime subprocess supervision
+  - runtime process supervision
   - JSON request/response bridging
+  - runtime event logging
 - `bin/decktation-runtime`
   - controller monitoring
+  - button-state polling
   - audio capture
   - transcription
-  - `ydotoold` lifecycle
-  - runtime status/events
+  - text injection via bundled `ydotool`
+  - private `ydotoold` lifecycle
+  - runtime status and events
 
-## Runtime package layout
+`main.py` is intentionally a bridge, not the place where runtime behavior
+should grow.
 
-PR 1 introduces:
+## Runtime source layout
+
+The runtime source of truth lives under `runtime/src/decktation_runtime/`:
 
 ```text
 runtime/
   pyproject.toml
+  uv.lock
+  runtime_entry.py
+  decktation-runtime.spec
   src/decktation_runtime/
     __init__.py
     config.py
@@ -53,95 +51,61 @@ runtime/
     hid.py
     logging_setup.py
     protocol.py
+    runtime_backend.py
     server.py
     voice_service.py
     ydotool.py
 ```
 
-## Compatibility strategy in PR 1
+### Module roles
 
-- `wow_voice_chat.py`, `controller_listener.py`, and `deck_hid.py` remain at
-  the repository root as import-compatible shims.
-- Tests and helper scripts can continue importing those legacy module names.
-- The actual implementation now lives in `runtime/src/decktation_runtime/`.
-- `main.py` remained untouched in this pass so plugin behavior was preserved.
+- `config.py`
+  path helpers for packaged/runtime layouts
+- `controller_monitor.py`
+  raw HID helper process for physical button combos
+- `hid.py`
+  Valve controller raw report decoding
+- `protocol.py`
+  request/response framing helpers
+- `runtime_backend.py`
+  runtime-owned command handlers and process lifecycle
+- `server.py`
+  line-delimited JSON runtime server
+- `voice_service.py`
+  audio capture, transcription, and text injection
+- `ydotool.py`
+  helper binary discovery
 
-## Method inventory
+## Runtime protocol
 
-The future runtime command surface must cover the current Decky-facing methods
-implemented in `main.py`:
-
-- `_main`
-- `_unload`
-- `_uninstall`
-- `_migration`
-- `set_enabled`
-- `get_button_config`
-- `set_share_diagnostics`
-- `set_button_config`
-- `set_confirm_mode`
-- `set_manual_send`
-- `set_transcription_options`
-- `set_model_size`
-- `get_presets`
-- `get_active_preset`
-- `set_active_preset`
-- `start_recording`
-- `stop_recording`
-- `is_recording`
-- `update_context`
-- `get_status`
-- `load_model`
-- `get_last_transcription`
-
-PR 1 did not change method behavior. It only created the package and design
-foundation needed for later protocol work.
-
-## PR 2 protocol shape
-
-PR 2 introduces a source-runnable line-delimited JSON protocol over
+The Decky bridge and runtime communicate over line-delimited JSON on
 stdin/stdout.
 
-Requests:
+Request shape:
 
 ```json
 {"id":"req-1","method":"initialize","params":{"config_dir":"/tmp/decktation"}}
 ```
 
-Success responses:
+Success response:
 
 ```json
 {"id":"req-1","ok":true,"result":{"initialized":true,"protocol_version":1}}
 ```
 
-Error responses:
+Error response:
 
 ```json
 {"id":"req-1","ok":false,"error":{"code":"unknown_method","message":"Unknown method: foo"}}
 ```
 
-Async events:
+Async event:
 
 ```json
 {"event":"log","payload":{"message":"runtime server started","protocol_version":1}}
 ```
 
-The initial server supports only:
-
-- `handshake`
-- `initialize`
-- `get_status`
-- `shutdown`
-
-This kept PR 2 limited to protocol validation and server framing. Runtime
-ownership had not moved out of `main.py` yet.
-
-## PR 3 request/response surface
-
-PR 3 completes the planned request/response method surface so the host-side
-bridge can proxy the same API currently exposed by `main.py`.
-
-Implemented request methods:
+Implemented runtime methods:
 
 - `handshake`
 - `initialize`
@@ -165,87 +129,47 @@ Implemented request methods:
 - `load_model`
 - `get_last_transcription`
 
-PR 3 still did not move controller monitoring or `ydotoold` ownership into the
-runtime. Those lifecycle responsibilities remained scheduled for PR 4.
+## Runtime ownership
 
-## PR 4 runtime ownership and bridge conversion
+The runtime now owns the behavior that used to be mixed into `main.py`:
 
-PR 4 completed the remaining runtime-owned lifecycle work and switched
-`main.py` over to the runtime bridge.
+- controller-monitor process startup/shutdown
+- controller button-state polling
+- `ydotoold` startup/shutdown
+- bundled PortAudio configuration
+- audio capture via Pulse/PipeWire tools
+- transcription model loading and execution
 
-Changes landed in this phase:
+`runtime_client.py` is the host-side subprocess client used by `main.py`.
 
-- `RuntimeBackend` now owns:
-  - controller-monitor process startup/shutdown
-  - controller button-state polling
-  - `ydotoold` startup/shutdown
-  - bundled PortAudio configuration for runtime audio dependencies
-- `decktation_runtime.server` supports `--controller-monitor` so the runtime
-  entrypoint can launch the controller helper process directly.
-- `runtime_client.py` was added as the host-side subprocess client for the
-  runtime.
-- `main.py` now:
-  - starts the runtime process
-  - sends `initialize`
-  - proxies Decky RPC calls over the JSON runtime protocol
-  - consumes runtime events for logging/diagnostics
-  - stops the runtime on unload/uninstall
+## Packaging model
 
-At this point, the intended architecture is live in source form:
+The packaged runtime is built from locked dependencies:
 
-- `main.py`
-  - Decky lifecycle
-  - Decky RPC methods
-  - runtime subprocess supervision
-  - JSON request/response bridging
-- `runtime/src/decktation_runtime/`
-  - controller monitoring ownership
-  - audio/transcription ownership
-  - `ydotoold` lifecycle ownership
-  - runtime status/events
+- `runtime/pyproject.toml`
+  source of truth for runtime dependencies
+- `runtime/uv.lock`
+  frozen dependency tree
+- `runtime/decktation-runtime.spec`
+  PyInstaller one-file build definition
 
-## Current status
+`backend/Dockerfile`:
 
-The runtime split is functionally in place in source form.
+- installs `uv`
+- resolves the runtime environment from `uv.lock`
+- builds `ydotool` and `ydotoold`
+- bundles helper binaries and PortAudio into the packaged runtime
 
-Completed:
+`backend/entrypoint.sh` exports the final build artifacts under `backend/out/`.
 
-- source layout refactor into `runtime/src/decktation_runtime/`
-- JSON runtime protocol and source-runnable server
-- full request/response runtime API surface matching current Decky methods
-- runtime ownership of controller monitoring and `ydotoold`
-- `main.py` bridge conversion through `RuntimeClient`
+`Makefile` exposes:
 
-Remaining major work:
+- `runtime-lock`
+- `runtime-build`
 
-- validate the Docker-built runtime artifact on target SteamOS hardware
-- finalize any packaging fixes discovered during that artifact validation
+## Installed plugin layout
 
-## PR 5 packaging strategy
-
-PR 5 moves the project from loose Python dependency installation to a locked
-runtime package and Docker-built executable artifact.
-
-Changes landed in this phase:
-
-- `runtime/pyproject.toml` is now the source of truth for runtime dependencies.
-- `runtime/uv.lock` freezes the runtime dependency tree.
-- `runtime/decktation-runtime.spec` defines a one-file PyInstaller build for
-  `decktation-runtime`.
-- `backend/Dockerfile` now:
-  - installs `uv`
-  - resolves the runtime environment from `uv.lock`
-  - builds `ydotool` / `ydotoold`
-  - bundles helper binaries and PortAudio into the runtime executable
-- `backend/entrypoint.sh` now exports `backend/out/decktation-runtime` instead
-  of an expanded `out/python/` tree.
-- `install_to_decky.sh` now installs the packaged runtime executable from
-  `backend/out/decktation-runtime`.
-- `Makefile` now includes:
-  - `runtime-lock`
-  - `runtime-build`
-
-The intended packaged layout is now:
+The packaged plugin layout is:
 
 ```text
 decktation/
@@ -256,11 +180,42 @@ decktation/
   defaults/
   bin/
     decktation-runtime
+    lib/
     licenses/
 ```
 
-The remaining packaging work is validation rather than architecture:
+The old root compatibility shims have been removed:
 
-- confirm the Docker build completes in the target environment
-- confirm the packaged executable resolves bundled libraries correctly
-- confirm the Decky install path works without source-tree fallbacks
+- `wow_voice_chat.py`
+- `controller_listener.py`
+- `deck_hid.py`
+- `runtime_bootstrap.py`
+
+Tests and developer tooling now import `decktation_runtime.*` directly.
+
+## Release and install flow
+
+Current release flow:
+
+1. Build the packaged runtime.
+2. Build `decktation.zip`.
+3. Upload `decktation.zip` to GitHub Releases on tags.
+4. Publish lightweight Pages metadata and download index pages.
+
+Current install flow:
+
+- Decky installs from the packaged ZIP.
+- `install_to_decky.sh` installs from a local `build-output/decktation.zip` or
+  downloads the latest packaged ZIP from GitHub Releases.
+- The runtime executable is installed at `bin/decktation-runtime`.
+
+## Current status
+
+The architectural refactor is complete.
+
+Remaining work is operational rather than structural:
+
+- validate the packaged runtime on target SteamOS hardware
+- keep docs, CI, and release flow aligned with the packaged-runtime model
+- verify Decky Plugin Database submission constraints against the packaged
+  build

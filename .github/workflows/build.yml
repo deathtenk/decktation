@@ -21,7 +21,7 @@ jobs:
       - run: node scripts/release-version.mjs check
       - run: pip install pytest sentry-sdk==2.66.0
       - run: pytest tests/ -v
-      - run: python -m py_compile main.py runtime_client.py wow_voice_chat.py controller_listener.py deck_hid.py telemetry.py runtime/runtime_entry.py runtime/src/decktation_runtime/*.py
+      - run: python -m py_compile main.py runtime_client.py telemetry.py runtime/runtime_entry.py runtime/src/decktation_runtime/*.py debug_controller.py test.py
 
   build:
     if: github.event_name != 'delete'
