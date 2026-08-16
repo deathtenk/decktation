@@ -1,6 +1,6 @@
 {
   "name": "decktation",
-  "version": "0.3.11-exp12",
+  "version": "0.3.11-exp13",
   "description": "Push-to-talk dictation for Steam Deck with context-aware transcription",
   "scripts": {
     "build": "shx rm -rf dist && rollup -c",
