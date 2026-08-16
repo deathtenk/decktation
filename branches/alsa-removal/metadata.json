@@ -1,0 +1,8 @@
+{
+  "plugin": "Decktation",
+  "channel": "branch",
+  "ref": "alsa-removal",
+  "commit": "509122277b20c8291836b1b05a19addc76666fc7",
+  "zip_url": "",
+  "generated_at": "2026-08-16T02:44:00Z"
+}
