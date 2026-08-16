@@ -136,7 +136,6 @@ The runtime now owns the behavior that used to be mixed into `main.py`:
 - controller-monitor process startup/shutdown
 - controller button-state polling
 - `ydotoold` startup/shutdown
-- bundled PortAudio configuration
 - audio capture via Pulse/PipeWire tools
 - transcription model loading and execution
 
@@ -158,7 +157,7 @@ The packaged runtime is built from locked dependencies:
 - installs `uv`
 - resolves the runtime environment from `uv.lock`
 - builds `ydotool` and `ydotoold`
-- bundles helper binaries and PortAudio into the packaged runtime
+- bundles helper binaries into the packaged runtime
 
 `backend/entrypoint.sh` exports the final build artifacts under `backend/out/`.
 
@@ -180,7 +179,6 @@ decktation/
   defaults/
   bin/
     decktation-runtime
-    lib/
     licenses/
 ```
 

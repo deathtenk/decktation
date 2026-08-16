@@ -59,7 +59,6 @@ decktation/
   defaults/
   bin/
     decktation-runtime
-    lib/
     licenses/
 ```
 
