@@ -1,8 +1,8 @@
 {
   "plugin": "Decktation",
-  "channel": "release-latest",
+  "channel": "release",
   "ref": "v0.3.11-exp12",
   "commit": "9afec5cc60e617cf01cc595eed43cbd1ea0de367",
-  "zip_url": "https://github.com/deathtenk/decktation/releases/latest/download/decktation.zip",
+  "zip_url": "https://github.com/deathtenk/decktation/releases/download/v0.3.11-exp12/decktation.zip",
   "generated_at": "2026-08-16T22:05:22Z"
 }
