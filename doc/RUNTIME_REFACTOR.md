@@ -34,6 +34,45 @@ The plugin now runs as two cooperating layers:
 `main.py` is intentionally a bridge, not the place where runtime behavior
 should grow.
 
+## Decky RPC inventory
+
+The Decky backend surface in `main.py` now falls into two categories:
+
+- Decky lifecycle hooks owned by the host bridge
+- Decky RPC methods forwarded to runtime commands
+
+### Lifecycle hooks
+
+| `main.py` method | Owned by | Runtime command | Notes |
+|---|---|---|---|
+| `_main` | host bridge | `initialize` | Starts or reconnects the runtime and passes resolved paths/config |
+| `_unload` | host bridge | `shutdown` via `RuntimeClient.stop()` | Stops the runtime process and flushes diagnostics |
+| `_uninstall` | host bridge | `shutdown` via `RuntimeClient.stop()` | Ensures runtime processes are stopped during uninstall |
+| `_migration` | host bridge | none | Migrates legacy config into Decky's settings directory |
+
+### Decky RPC methods
+
+| Decky RPC method | Owned by | Runtime command | Notes |
+|---|---|---|---|
+| `set_enabled` | runtime | `set_enabled` | Persists enabled state for controller monitoring |
+| `get_button_config` | runtime | `get_button_config` | Returns normalized persisted config |
+| `set_share_diagnostics` | runtime | `set_share_diagnostics` | Persists consent and mirrors the result into host telemetry state |
+| `set_button_config` | runtime | `set_button_config` | Updates button combo and restarts controller listener if needed |
+| `set_confirm_mode` | runtime | `set_confirm_mode` | Toggles pending-send confirmation behavior |
+| `set_manual_send` | runtime | `set_manual_send` | Skips final Enter press when enabled |
+| `set_transcription_options` | runtime | `set_transcription_options` | Updates selected transcription language |
+| `set_model_size` | runtime | `set_model_size` | Persists model choice and reloads an already-loaded model |
+| `get_presets` | runtime | `get_presets` | Returns available game presets |
+| `get_active_preset` | runtime | `get_active_preset` | Returns the selected preset id |
+| `set_active_preset` | runtime | `set_active_preset` | Switches runtime voice-service preset |
+| `start_recording` | runtime | `start_recording` | Used by the manual test flow and direct triggers |
+| `stop_recording` | runtime | `stop_recording` | Supports `send=false` for non-typing test recordings |
+| `is_recording` | runtime | `is_recording` | Returns current recording state |
+| `update_context` | runtime | `update_context` | Writes updated game context to runtime-owned context storage |
+| `get_status` | runtime | `get_status` | Primary polled status surface for the frontend |
+| `load_model` | runtime | `load_model` | Explicitly warms the Whisper model |
+| `get_last_transcription` | runtime | `get_last_transcription` | Returns the latest transcription for UI display |
+
 ## Runtime source layout
 
 The runtime source of truth lives under `runtime/src/decktation_runtime/`:
