@@ -1,7 +1,7 @@
 VERSION := $(shell node scripts/release-version.mjs print)
 TAG := v$(VERSION)
 
-.PHONY: version version-check version-set release-check release-tag runtime-lock runtime-build
+.PHONY: version version-check version-set release-check release-tag release runtime-lock runtime-build
 
 version:
 	@node scripts/release-version.mjs print
@@ -46,3 +46,14 @@ release-tag: release-check
 	}; \
 	git tag -a "$(TAG)" -m "Release $(TAG)"; \
 	echo "Created $(TAG). Push it with: git push origin $(TAG)"
+
+release:
+	@test -n "$(VERSION)" || (echo "usage: make release VERSION=X.Y.Z" >&2; exit 1)
+	@set -eu; \
+	test -z "$$(git status --porcelain)" || { \
+		echo "error: commit or stash all changes before cutting a release" >&2; exit 1; \
+	}; \
+	$(MAKE) version-set VERSION="$(VERSION)"; \
+	git add package.json plugin.json; \
+	git commit -m "Release v$(VERSION)"; \
+	$(MAKE) release-tag VERSION="$(VERSION)"
