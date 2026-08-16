@@ -35,7 +35,7 @@ STEAM_CONTROLLER_2026_BUTTON_BITS = {
     "L4": (4, 1),
     "L5": (4, 2),
     "R1": (3, 1),
-    "R4": (5, 0),
+    "R4": (2, 7),
 }
 
 # The Deck also reports uncalibrated 16-bit analog trigger values.  Preserve
