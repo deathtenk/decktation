@@ -779,32 +779,31 @@ const DecktationPanel: VFC<{ logic: DecktationLogic }> = ({ logic }) => {
 								}}
 							/>
 						</PanelSectionRow>
-						{buttons.length > 1 && (
-							<div style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: '16px' }}>
-								<div
+						<PanelSectionRow>
+							<div style={{ marginTop: '4px' }}>
+								<ButtonItem
+									layout="below"
+									disabled={buttons.length <= 1}
 									onClick={async () => {
+										if (buttons.length <= 1) return;
 										const newButtons = buttons.filter((_, i) => i !== index);
 										setButtons(newButtons);
 										await setButtonConfig(newButtons, showNotifications);
 									}}
-									style={{
-										color: '#e05f5f',
-										cursor: 'pointer',
-										padding: '5px 8px',
+								>
+									<div style={{
 										display: 'flex',
 										alignItems: 'center',
-										gap: '6px',
-										backgroundColor: 'rgba(224, 95, 95, 0.12)',
-										borderRadius: '4px',
-										textDecoration: 'none',
-										userSelect: 'none',
-									}}
-								>
-									<FaTrash size={13} />
-									<span style={{ fontSize: '12px', textDecoration: 'none' }}>Remove</span>
-								</div>
+										justifyContent: 'center',
+										gap: '8px',
+										color: buttons.length > 1 ? '#e05f5f' : undefined,
+									}}>
+										<FaTrash size={13} />
+										<span>{`Remove Button ${index + 1}`}</span>
+									</div>
+								</ButtonItem>
 							</div>
-						)}
+						</PanelSectionRow>
 					</div>
 				))}
 
