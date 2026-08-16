@@ -3,7 +3,7 @@ FROM ghcr.io/steamdeckhomebrew/holo-base:latest
 ARG YDOTOOL_COMMIT=57ba7d0af525e82da2de0e275d169477f293b197
 
 RUN pacman -Sydd --noconfirm --dbpath /var/lib/pacman \
-        git portaudio python-pip
+        git python-pip
 
 RUN mkdir -p /backend
 COPY entrypoint.sh /backend/entrypoint.sh
@@ -42,7 +42,6 @@ RUN git init /ydotool-src \
 RUN cd /runtime-build/runtime \
     && YDOTOOL_BIN=/ydotool-build/ydotool \
        YDOTOOLD_BIN=/ydotool-build/ydotoold \
-       PORTAUDIO_LIB=/usr/lib/libportaudio.so.2 \
        .venv/bin/pyinstaller decktation-runtime.spec
 
 ENTRYPOINT ["/backend/entrypoint.sh"]
