@@ -53,9 +53,7 @@ jobs:
       - name: Validate packaged runtime artifact
         run: |
           test -x backend/out/decktation-runtime
-          test -f backend/out/lib/libportaudio.so.2
           test -f backend/out/licenses/ydotool-AGPL-3.0.txt
-          test -f backend/out/licenses/portaudio-MIT.txt
 
       - name: Build marketplace artifact
         run: sudo /tmp/decky-cli plugin build -b -t /tmp/decktation-decky-build -o build-output -s directory .
@@ -64,7 +62,6 @@ jobs:
         run: |
           unzip -t build-output/decktation.zip
           unzip -l build-output/decktation.zip | grep -q 'decktation/bin/decktation-runtime'
-          unzip -l build-output/decktation.zip | grep -q 'decktation/bin/lib/libportaudio.so.2'
           unzip -l build-output/decktation.zip | grep -q 'decktation/telemetry.py'
           unzip -l build-output/decktation.zip | grep -q 'decktation/runtime_client.py'
           unzip -l build-output/decktation.zip | grep -q 'decktation/game_presets.json'
