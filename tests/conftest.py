@@ -1,7 +1,7 @@
 """
 Shared pytest fixtures and mocks for Decktation tests.
 
-Heavy dependencies (faster_whisper, sounddevice) are mocked at the module level
+Heavy dependencies (faster_whisper) are mocked at the module level
 so tests can import the runtime voice service without requiring ML/audio
 hardware.
 """
@@ -19,4 +19,3 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "runtime", "src
 # test venv; mock it since no test here exercises audio processing code.
 sys.modules.setdefault("numpy", MagicMock())
 sys.modules.setdefault("faster_whisper", MagicMock())
-sys.modules.setdefault("sounddevice", MagicMock())

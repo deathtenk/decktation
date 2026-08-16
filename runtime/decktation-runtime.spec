@@ -11,13 +11,11 @@ src_root = project_root / "src"
 
 ydotool_bin = os.environ.get("YDOTOOL_BIN")
 ydotoold_bin = os.environ.get("YDOTOOLD_BIN")
-portaudio_lib = os.environ.get("PORTAUDIO_LIB")
 
 binaries = []
 for src, dest in [
     (ydotool_bin, "bin"),
     (ydotoold_bin, "bin"),
-    (portaudio_lib, "bin/lib"),
 ]:
     if src:
         binaries.append((src, dest))
@@ -27,7 +25,6 @@ for package in ("faster_whisper", "tokenizers", "onnxruntime"):
     datas += collect_data_files(package)
 
 binaries += collect_dynamic_libs("numpy")
-binaries += collect_dynamic_libs("sounddevice")
 binaries += collect_dynamic_libs("ctranslate2")
 binaries += collect_dynamic_libs("onnxruntime")
 

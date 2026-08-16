@@ -12,11 +12,3 @@ version 1.0.4, built from commit
 The packaged runtime executable `bin/decktation-runtime` embeds Python runtime
 dependencies resolved from `runtime/pyproject.toml` and locked by
 `runtime/uv.lock`.
-
-The store artifact also includes the unmodified SteamOS/Arch Linux PortAudio
-shared library used by `sounddevice`:
-
-- Upstream source: <https://github.com/PortAudio/portaudio>
-- SteamOS package: `portaudio`
-- License: MIT
-- Packaged license: `bin/licenses/portaudio-MIT.txt`
