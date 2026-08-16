@@ -34,6 +34,10 @@ The plugin now runs as two cooperating layers:
 `main.py` is intentionally a bridge, not the place where runtime behavior
 should grow.
 
+The packaged runtime executable is the default runtime launch path. Source-tree
+runtime execution is retained only as an explicit development mode by setting
+`DECKTATION_RUNTIME_MODE=source`.
+
 ## Decky RPC inventory
 
 The Decky backend surface in `main.py` now falls into two categories:
@@ -245,6 +249,8 @@ Current install flow:
 - `install_to_decky.sh` installs from a local `build-output/decktation.zip` or
   downloads the latest packaged ZIP from GitHub Releases.
 - The runtime executable is installed at `bin/decktation-runtime`.
+- Development-only source runtime launching requires
+  `DECKTATION_RUNTIME_MODE=source`.
 
 ## Current status
 
