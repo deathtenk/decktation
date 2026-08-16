@@ -59,10 +59,6 @@ runtime is not compatible. Hardware-test the built artifact on each required
 channel. If their Python ABIs differ, keep transcription in the packaged
 runtime and leave `main.py` as a thin Decky API bridge.
 
-PortAudio is a dynamically linked third-party dependency used by
-`sounddevice`; answer **Yes** to the corresponding backend question in the
-submission template and verify it on Stable and Beta.
-
 ### 2. Test the actual store artifact
 
 Build with the same CLI invocation as the Plugin Database:
