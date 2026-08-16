@@ -59,7 +59,6 @@ decktation/
   defaults/
   bin/
     decktation-runtime
-    lib/
     licenses/
 ```
 
@@ -104,6 +103,13 @@ cd decktation
 
 The install script downloads the latest published `decktation.zip` from GitHub
 Releases unless a local packaged ZIP already exists at `build-output/decktation.zip`.
+It also stops `plugin_loader` before replacing plugin files and starts it again
+after the install completes.
+
+If Decky previously created `~/homebrew/plugins/decktation` as `root:root`, the
+script now detects that case and prompts for `sudo` only to normalize
+ownership. You should still run `install_to_decky.sh` as your normal user
+account, not with `sudo`.
 
 To install from a different published ZIP, override the URL:
 

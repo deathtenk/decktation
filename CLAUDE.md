@@ -18,6 +18,8 @@ make runtime-build    # Build backend/out/decktation-runtime via Docker
 
 Runtime dependencies are defined in `runtime/pyproject.toml`, frozen in
 `runtime/uv.lock`, and bundled into the packaged runtime executable.
+The packaged runtime is the default launch path; source runtime launching is
+debug-only via `DECKTATION_RUNTIME_MODE=source`.
 
 ## Testing
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import queue
 import shutil
 import subprocess
+import sys
 import threading
 import uuid
 
@@ -13,6 +14,8 @@ class RuntimeClientError(RuntimeError):
 
 
 class RuntimeClient:
+    RUNTIME_MODE_ENV = "DECKTATION_RUNTIME_MODE"
+
     def __init__(self, plugin_path, logger, event_handler=None):
         self.plugin_path = Path(plugin_path)
         self.logger = logger
@@ -24,16 +27,12 @@ class RuntimeClient:
         self._pending_lock = threading.Lock()
         self._started = False
 
-    def _runtime_executable(self):
-        executable = self.plugin_path / "bin" / "decktation-runtime"
-        if executable.is_file() and os.access(executable, os.X_OK):
-            return [str(executable)], {}
-
-        python_bin = "/usr/bin/python3"
-        if not os.path.exists(python_bin):
+    def _source_runtime_executable(self):
+        python_bin = sys.executable
+        if not python_bin or not os.path.exists(python_bin):
             python_bin = shutil.which("python3")
         if not python_bin:
-            raise RuntimeClientError("No python3 found for source runtime fallback")
+            raise RuntimeClientError("No python3 found for source runtime dev mode")
 
         python_path_entries = [
             str(self.plugin_path / "runtime" / "src"),
@@ -51,6 +50,21 @@ class RuntimeClient:
             "PYTHONPATH": os.pathsep.join(python_path_entries),
         }
         return [python_bin, "-m", "decktation_runtime.server"], env
+
+    def _runtime_executable(self):
+        runtime_mode = os.environ.get(self.RUNTIME_MODE_ENV, "").strip().lower()
+        if runtime_mode == "source":
+            return self._source_runtime_executable()
+
+        executable = self.plugin_path / "bin" / "decktation-runtime"
+        if executable.is_file() and os.access(executable, os.X_OK):
+            return [str(executable)], {}
+
+        raise RuntimeClientError(
+            "Packaged runtime not found at "
+            f"{executable}. Build/install bin/decktation-runtime first, "
+            f"or set {self.RUNTIME_MODE_ENV}=source for development."
+        )
 
     def start(self):
         if self.process and self.process.poll() is None:

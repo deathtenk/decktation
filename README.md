@@ -55,6 +55,10 @@ The runtime source of truth lives under `runtime/src/decktation_runtime/`.
 Runtime dependencies are defined in `runtime/pyproject.toml` and frozen in
 `runtime/uv.lock`.
 
+The packaged runtime executable is the default and supported launch path.
+For local debugging only, set `DECKTATION_RUNTIME_MODE=source` to make the
+bridge run `python -m decktation_runtime.server` from the source tree instead.
+
 ## Usage
 
 1. Open Quick Access Menu (... button on Steam Deck)
@@ -230,6 +234,9 @@ make runtime-lock
 
 # Build the packaged runtime locally (requires Docker)
 make runtime-build
+
+# Optional debug-only source runtime mode for bridge testing
+DECKTATION_RUNTIME_MODE=source python3 main.py
 ```
 
 GitHub Actions builds release artifacts on tags and publishes `decktation.zip`
