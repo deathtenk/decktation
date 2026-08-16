@@ -26,8 +26,16 @@ STEAM_DECK_BUTTON_BITS = {
 STEAM_CONTROLLER_2026_REPORT_SIZE = 54
 STEAM_CONTROLLER_2026_REPORT_ID = 0x42
 STEAM_CONTROLLER_2026_BUTTON_BITS = {
+    "A": (2, 0),
+    "B": (2, 1),
+    "X": (2, 2),
+    "Y": (2, 3),
+    "R5": (3, 0),
     "L1": (4, 3),
+    "L4": (4, 1),
+    "L5": (4, 2),
     "R1": (3, 1),
+    "R4": (5, 4),
 }
 
 # The Deck also reports uncalibrated 16-bit analog trigger values.  Preserve
