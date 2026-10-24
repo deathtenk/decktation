@@ -11,7 +11,7 @@ import {
 	Focusable,
 } from "decky-frontend-lib";
 
-import { callable, toaster } from "@decky/api";
+import { callable } from "@decky/api";
 
 import React, {
 	VFC,
@@ -80,9 +80,11 @@ class DecktationLogic {
 	showNotifications: boolean = true;
 	prevRecordingStartCount: number = 0;
 	prevPendingText: string = "";
-	lastPendingToastId: number = -1;
 
-	notify = async (message: string, duration: number = 2000, body: string = ""): Promise<number> => {
+	notify = (message: string, duration: number = 2000, body: string = ""): void => {
+		if (!this.showNotifications) return;
+		const store = (window as any).NotificationStore;
+		if (!store?.ProcessNotification) return;
 		if (!body) {
 			body = message;
 		}
@@ -92,7 +94,7 @@ class DecktationLogic {
 			duration: duration,
 			critical: false,
 		};
-		const id: number = (window as any).NotificationStore ? (window as any).NotificationStore.m_nNextTestNotificationID++ : 0;
+		const id: number = store.m_nNextTestNotificationID++;
 		const toastData: any = {
 			nNotificationID: id,
 			bNewIndicator: false,
@@ -110,41 +112,17 @@ class DecktationLogic {
 			eFeature: 0,
 			toastDurationMS: duration,
 			bCritical: false,
-			fnTray: (_t: any, tray: any) => { tray.unshift({ eType: 31, notifications: [toastData] }); },
+			// Status popups must not enter Steam notification history: its renderer
+			// expects data.item.notification_type, which these Decky toasts lack.
+			fnTray: null,
 		};
 		try {
-			(window as any).NotificationStore.ProcessNotification(info, toastData, 0);
-		} catch (_e) {
-			// fallback to standard toaster if direct call fails
-			toaster.toast({ title: message, body: toast.body, duration: duration, critical: false });
+			store.ProcessNotification(info, toastData, 0);
+		} catch (error) {
+			// The standard Decky toaster also inserts a tray entry; do not fall back
+			// to it. Notification failure must not interrupt recording.
+			console.warn("[Decktation] Could not display status popup:", error);
 		}
-		return id;
-	}
-
-	dismissNotification = (id: number) => {
-		// Force-expire the toast by reprocessing it with a 1ms duration
-		try {
-			const toastData: any = {
-				nNotificationID: id,
-				bNewIndicator: false,
-				rtCreated: Date.now(),
-				eType: 43,
-				eSource: 1,
-				nToastDurationMS: 1,
-				data: { title: "", body: "", duration: 1, critical: false },
-				decky: true,
-			};
-			const info: any = {
-				showToast: true,
-				sound: 6,
-				playSound: false,
-				eFeature: 0,
-				toastDurationMS: 1,
-				bCritical: false,
-				fnTray: (_t: any, tray: any) => { tray.unshift({ eType: 31, notifications: [toastData] }); },
-			};
-			(window as any).NotificationStore.ProcessNotification(info, toastData, 0);
-		} catch (_e) {}
 	}
 
 	// Handler for RegisterForControllerStateChanges (antiquitte style)
@@ -925,27 +903,23 @@ export default definePlugin(() => {
 		try {
 			const result = await getStatus();
 			if (result.success) {
-				if (logic.showNotifications) {
-					const startCount: number = result.recording_start_count || 0;
-					if (startCount > logic.prevRecordingStartCount) {
-						logic.notify("Recording", 1500, "🎤 Recording...");
-					}
-					logic.prevRecordingStartCount = startCount;
-
-					const pendingText: string = result.pending_text || "";
-					const pendingDelay: number = result.pending_delay || 0;
-					if (pendingText && !logic.prevPendingText) {
-						const secs = Math.round(pendingDelay);
-						logic.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`)
-							.then(id => { logic.lastPendingToastId = id; });
-					} else if (!pendingText && logic.prevPendingText) {
-						if (logic.lastPendingToastId >= 0) {
-							logic.dismissNotification(logic.lastPendingToastId);
-							logic.lastPendingToastId = -1;
-						}
-					}
-					logic.prevPendingText = pendingText;
+				const startCount: number = result.recording_start_count || 0;
+				if (startCount > logic.prevRecordingStartCount) {
+					logic.notify("Recording", 1500, "🎤 Recording...");
 				}
+				logic.prevRecordingStartCount = startCount;
+
+				const pendingText: string = result.pending_text || "";
+				const pendingDelay: number = result.pending_delay || 0;
+				if (pendingText && !logic.prevPendingText) {
+					const secs = Math.round(pendingDelay);
+					// Popup-only alerts expire naturally. Reprocessing a notification
+					// with a 1ms duration creates another popup, rather than dismissing it.
+					logic.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`);
+				}
+				// Track transitions even while alerts are disabled so enabling them
+				// does not replay a recording or countdown that already started.
+				logic.prevPendingText = pendingText;
 			}
 		} catch (_e) {
 		} finally {

@@ -5,7 +5,7 @@
 
     var React__default = /*#__PURE__*/_interopDefaultLegacy(React);
 
-    var _manifest = {"name":"Decktation","version":"0.3.9","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
+    var _manifest = {"name":"Decktation","version":"0.3.11-exp13","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
 
     const manifest = _manifest;
     const API_VERSION = 2;
@@ -32,7 +32,7 @@
     api.addEventListener;
     api.removeEventListener;
     api.routerHook;
-    const toaster = api.toaster;
+    api.toaster;
     api.openFilePicker;
     api.executeInTab;
     api.injectCssIntoTab;
@@ -169,8 +169,12 @@
             this.showNotifications = true;
             this.prevRecordingStartCount = 0;
             this.prevPendingText = "";
-            this.lastPendingToastId = -1;
-            this.notify = async (message, duration = 2000, body = "") => {
+            this.notify = (message, duration = 2000, body = "") => {
+                if (!this.showNotifications)
+                    return;
+                const store = window.NotificationStore;
+                if (!store?.ProcessNotification)
+                    return;
                 if (!body) {
                     body = message;
                 }
@@ -180,7 +184,7 @@
                     duration: duration,
                     critical: false,
                 };
-                const id = window.NotificationStore ? window.NotificationStore.m_nNextTestNotificationID++ : 0;
+                const id = store.m_nNextTestNotificationID++;
                 const toastData = {
                     nNotificationID: id,
                     bNewIndicator: false,
@@ -198,42 +202,18 @@
                     eFeature: 0,
                     toastDurationMS: duration,
                     bCritical: false,
-                    fnTray: (_t, tray) => { tray.unshift({ eType: 31, notifications: [toastData] }); },
+                    // Status popups must not enter Steam notification history: its renderer
+                    // expects data.item.notification_type, which these Decky toasts lack.
+                    fnTray: null,
                 };
                 try {
-                    window.NotificationStore.ProcessNotification(info, toastData, 0);
+                    store.ProcessNotification(info, toastData, 0);
                 }
-                catch (_e) {
-                    // fallback to standard toaster if direct call fails
-                    toaster.toast({ title: message, body: toast.body, duration: duration, critical: false });
+                catch (error) {
+                    // The standard Decky toaster also inserts a tray entry; do not fall back
+                    // to it. Notification failure must not interrupt recording.
+                    console.warn("[Decktation] Could not display status popup:", error);
                 }
-                return id;
-            };
-            this.dismissNotification = (id) => {
-                // Force-expire the toast by reprocessing it with a 1ms duration
-                try {
-                    const toastData = {
-                        nNotificationID: id,
-                        bNewIndicator: false,
-                        rtCreated: Date.now(),
-                        eType: 43,
-                        eSource: 1,
-                        nToastDurationMS: 1,
-                        data: { title: "", body: "", duration: 1, critical: false },
-                        decky: true,
-                    };
-                    const info = {
-                        showToast: true,
-                        sound: 6,
-                        playSound: false,
-                        eFeature: 0,
-                        toastDurationMS: 1,
-                        bCritical: false,
-                        fnTray: (_t, tray) => { tray.unshift({ eType: 31, notifications: [toastData] }); },
-                    };
-                    window.NotificationStore.ProcessNotification(info, toastData, 0);
-                }
-                catch (_e) { }
             };
             // Handler for RegisterForControllerStateChanges (antiquitte style)
             this.handleControllerState = (val) => {
@@ -735,25 +715,24 @@
                                 setButtons(newButtons);
                                 await setButtonConfig(newButtons, showNotifications);
                             } })),
-                    buttons.length > 1 && (React__default["default"].createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', paddingRight: '16px' } },
-                        React__default["default"].createElement("div", { onClick: async () => {
-                                const newButtons = buttons.filter((_, i) => i !== index);
-                                setButtons(newButtons);
-                                await setButtonConfig(newButtons, showNotifications);
-                            }, style: {
-                                color: '#e05f5f',
-                                cursor: 'pointer',
-                                padding: '5px 8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                backgroundColor: 'rgba(224, 95, 95, 0.12)',
-                                borderRadius: '4px',
-                                textDecoration: 'none',
-                                userSelect: 'none',
-                            } },
-                            React__default["default"].createElement(FaTrash, { size: 13 }),
-                            React__default["default"].createElement("span", { style: { fontSize: '12px', textDecoration: 'none' } }, "Remove"))))))),
+                    React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
+                        React__default["default"].createElement("div", { style: { marginTop: '4px' } },
+                            React__default["default"].createElement(deckyFrontendLib.ButtonItem, { layout: "below", disabled: buttons.length <= 1, onClick: async () => {
+                                    if (buttons.length <= 1)
+                                        return;
+                                    const newButtons = buttons.filter((_, i) => i !== index);
+                                    setButtons(newButtons);
+                                    await setButtonConfig(newButtons, showNotifications);
+                                } },
+                                React__default["default"].createElement("div", { style: {
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        color: buttons.length > 1 ? '#e05f5f' : undefined,
+                                    } },
+                                    React__default["default"].createElement(FaTrash, { size: 13 }),
+                                    React__default["default"].createElement("span", null, `Remove Button ${index + 1}`)))))))),
                 buttons.length < 5 && (React__default["default"].createElement(deckyFrontendLib.PanelSectionRow, null,
                     React__default["default"].createElement("div", { style: { marginTop: '8px' } },
                         React__default["default"].createElement(deckyFrontendLib.ButtonItem, { layout: "below", onClick: async () => {
@@ -836,27 +815,22 @@
             try {
                 const result = await getStatus();
                 if (result.success) {
-                    if (logic.showNotifications) {
-                        const startCount = result.recording_start_count || 0;
-                        if (startCount > logic.prevRecordingStartCount) {
-                            logic.notify("Recording", 1500, "🎤 Recording...");
-                        }
-                        logic.prevRecordingStartCount = startCount;
-                        const pendingText = result.pending_text || "";
-                        const pendingDelay = result.pending_delay || 0;
-                        if (pendingText && !logic.prevPendingText) {
-                            const secs = Math.round(pendingDelay);
-                            logic.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`)
-                                .then(id => { logic.lastPendingToastId = id; });
-                        }
-                        else if (!pendingText && logic.prevPendingText) {
-                            if (logic.lastPendingToastId >= 0) {
-                                logic.dismissNotification(logic.lastPendingToastId);
-                                logic.lastPendingToastId = -1;
-                            }
-                        }
-                        logic.prevPendingText = pendingText;
+                    const startCount = result.recording_start_count || 0;
+                    if (startCount > logic.prevRecordingStartCount) {
+                        logic.notify("Recording", 1500, "🎤 Recording...");
                     }
+                    logic.prevRecordingStartCount = startCount;
+                    const pendingText = result.pending_text || "";
+                    const pendingDelay = result.pending_delay || 0;
+                    if (pendingText && !logic.prevPendingText) {
+                        const secs = Math.round(pendingDelay);
+                        // Popup-only alerts expire naturally. Reprocessing a notification
+                        // with a 1ms duration creates another popup, rather than dismissing it.
+                        logic.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`);
+                    }
+                    // Track transitions even while alerts are disabled so enabling them
+                    // does not replay a recording or countdown that already started.
+                    logic.prevPendingText = pendingText;
                 }
             }
             catch (_e) {
