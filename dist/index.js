@@ -5,7 +5,7 @@
 
     var React__default = /*#__PURE__*/_interopDefaultLegacy(React);
 
-    var _manifest = {"name":"Decktation","version":"0.3.11-exp13","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
+    var _manifest = {"name":"Decktation","version":"0.3.11-exp15","author":"silverfoxy","flags":["_root"],"api_version":1,"publish":{"tags":["voice","dictation","speech-to-text","input","chat","gaming","accessibility"],"description":"Push-to-talk dictation for Steam Deck. Context-aware speech-to-text using faster-whisper.","image":"https://raw.githubusercontent.com/silverfoxy/decktation/master/logo.png"}};
 
     const manifest = _manifest;
     const API_VERSION = 2;
@@ -32,7 +32,7 @@
     api.addEventListener;
     api.removeEventListener;
     api.routerHook;
-    api.toaster;
+    const toaster = api.toaster;
     api.openFilePicker;
     api.executeInTab;
     api.injectCssIntoTab;
@@ -166,54 +166,77 @@
             this.inputError = "";
             this.onButtonChange = null;
             this.l5Held = false;
-            this.showNotifications = true;
+            this.notificationsEnabled = true;
+            this.notificationsDisposed = false;
+            this.notificationHandles = new Map();
+            this.testRecordingInProgress = false;
             this.prevRecordingStartCount = 0;
             this.prevPendingText = "";
-            this.notify = (message, duration = 2000, body = "") => {
-                if (!this.showNotifications)
-                    return;
-                const store = window.NotificationStore;
-                if (!store?.ProcessNotification)
-                    return;
-                if (!body) {
-                    body = message;
-                }
-                const toast = {
-                    title: message,
-                    body: body,
-                    duration: duration,
-                    critical: false,
-                };
-                const id = store.m_nNextTestNotificationID++;
-                const toastData = {
-                    nNotificationID: id,
-                    bNewIndicator: false,
-                    rtCreated: Date.now(),
-                    eType: 43,
-                    eSource: 1,
-                    nToastDurationMS: duration,
-                    data: toast,
-                    decky: true,
-                };
-                const info = {
-                    showToast: true,
-                    sound: 6,
-                    playSound: false,
-                    eFeature: 0,
-                    toastDurationMS: duration,
-                    bCritical: false,
-                    // Status popups must not enter Steam notification history: its renderer
-                    // expects data.item.notification_type, which these Decky toasts lack.
-                    fnTray: null,
-                };
+            this.dismissNotification = (slot) => {
+                const handle = this.notificationHandles.get(slot);
+                this.notificationHandles.delete(slot);
                 try {
-                    store.ProcessNotification(info, toastData, 0);
+                    handle?.dismiss();
                 }
                 catch (error) {
-                    // The standard Decky toaster also inserts a tray entry; do not fall back
-                    // to it. Notification failure must not interrupt recording.
-                    console.warn("[Decktation] Could not display status popup:", error);
+                    console.warn("[Decktation] Could not dismiss notification:", error);
                 }
+            };
+            this.dismissNotifications = () => {
+                this.dismissNotification("status");
+                this.dismissNotification("pending");
+            };
+            this.disposeNotifications = () => {
+                this.notificationsDisposed = true;
+                this.dismissNotifications();
+            };
+            this.notify = (message, duration = 2000, body = "", slot = "status") => {
+                if (!this.showNotifications || this.notificationsDisposed)
+                    return;
+                this.dismissNotification(slot);
+                try {
+                    const handle = toaster.toast({
+                        title: message,
+                        body: body || message,
+                        duration,
+                        // Dictation alerts are transient, including their history entries.
+                        expiration: duration,
+                        playSound: false,
+                        showNewIndicator: false,
+                        critical: false,
+                    });
+                    // Another plugin may replace the shared toaster and violate its contract.
+                    // Keep dictation working even if no usable notification handle is returned.
+                    if (typeof handle?.dismiss === "function") {
+                        this.notificationHandles.set(slot, handle);
+                    }
+                    else {
+                        console.warn("[Decktation] Toaster returned no dismiss handle");
+                    }
+                }
+                catch (error) {
+                    console.warn("[Decktation] Could not display notification:", error);
+                }
+            };
+            this.updateNotificationStatus = (result) => {
+                const startCount = result.recording_start_count || 0;
+                if (startCount > this.prevRecordingStartCount && !this.testRecordingInProgress) {
+                    this.dismissNotification("pending");
+                    this.notify("Decktation", 1500, "🎤 Recording...");
+                }
+                this.prevRecordingStartCount = startCount;
+                const pendingText = result.pending_text || "";
+                const pendingDelay = result.pending_delay || 0;
+                if (pendingText && pendingText !== this.prevPendingText && !this.testRecordingInProgress) {
+                    const secs = Math.round(pendingDelay);
+                    this.dismissNotification("status");
+                    this.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`, "pending");
+                }
+                else if (!pendingText && this.prevPendingText) {
+                    this.dismissNotification("pending");
+                }
+                // Always consume transitions, including while alerts are disabled.
+                this.prevPendingText = pendingText;
             };
             // Handler for RegisterForControllerStateChanges (antiquitte style)
             this.handleControllerState = (val) => {
@@ -274,26 +297,47 @@
                 }
             };
             this.testRecording = async (onComplete) => {
-                this.notify("Decktation", 1000, "Recording for 3 seconds...");
-                await startRecording();
-                // Wait 3 seconds
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                // Test recordings display their result in the panel but must never type
-                // into the active application. Change the UI state at exactly 3 seconds,
-                // then wait only for transcription to finish.
-                const transcription = stopRecording(false);
-                this.notify("Decktation", 1500, "Transcribing...");
-                await transcription;
-                if (onComplete) {
-                    const transcriptionResult = await getLastTranscription();
-                    if (transcriptionResult.success && transcriptionResult.transcription) {
-                        const data = transcriptionResult.transcription;
-                        const text = data.text || "";
-                        const time = data.timestamp ? new Date(data.timestamp * 1000).toLocaleTimeString() : "";
-                        onComplete(text, time);
+                if (this.testRecordingInProgress)
+                    return;
+                this.testRecordingInProgress = true;
+                try {
+                    this.notify("Decktation", 1000, "Recording for 3 seconds...");
+                    await startRecording();
+                    // Wait 3 seconds
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    // Test recordings display their result in the panel but must never type
+                    // into the active application. Change the UI state at exactly 3 seconds,
+                    // then wait only for transcription to finish.
+                    const transcription = stopRecording(false);
+                    this.notify("Decktation", 1500, "Transcribing...");
+                    await transcription;
+                    if (onComplete) {
+                        const transcriptionResult = await getLastTranscription();
+                        if (transcriptionResult.success && transcriptionResult.transcription) {
+                            const data = transcriptionResult.transcription;
+                            const text = data.text || "";
+                            const time = data.timestamp ? new Date(data.timestamp * 1000).toLocaleTimeString() : "";
+                            onComplete(text, time);
+                        }
                     }
                 }
+                finally {
+                    // Catch up the counter before releasing the guard if polling missed it.
+                    try {
+                        const status = await getStatus();
+                        if (status.success)
+                            this.updateNotificationStatus(status);
+                    }
+                    catch (_) { }
+                    this.testRecordingInProgress = false;
+                }
             };
+        }
+        get showNotifications() { return this.notificationsEnabled; }
+        set showNotifications(enabled) {
+            this.notificationsEnabled = enabled;
+            if (!enabled)
+                this.dismissNotifications();
         }
     }
     // Available button options
@@ -815,22 +859,7 @@
             try {
                 const result = await getStatus();
                 if (result.success) {
-                    const startCount = result.recording_start_count || 0;
-                    if (startCount > logic.prevRecordingStartCount) {
-                        logic.notify("Recording", 1500, "🎤 Recording...");
-                    }
-                    logic.prevRecordingStartCount = startCount;
-                    const pendingText = result.pending_text || "";
-                    const pendingDelay = result.pending_delay || 0;
-                    if (pendingText && !logic.prevPendingText) {
-                        const secs = Math.round(pendingDelay);
-                        // Popup-only alerts expire naturally. Reprocessing a notification
-                        // with a 1ms duration creates another popup, rather than dismissing it.
-                        logic.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`);
-                    }
-                    // Track transitions even while alerts are disabled so enabling them
-                    // does not replay a recording or countdown that already started.
-                    logic.prevPendingText = pendingText;
+                    logic.updateNotificationStatus(result);
                 }
             }
             catch (_e) {
@@ -844,6 +873,7 @@
             content: React__default["default"].createElement(DecktationPanel, { logic: logic }),
             icon: React__default["default"].createElement(FaMicrophone, null),
             onDismount() {
+                logic.disposeNotifications();
                 clearInterval(bgNotifyInterval);
                 if (input_register) {
                     input_register.unregister();

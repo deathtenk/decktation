@@ -5,7 +5,7 @@
   "scripts": {
     "build": "shx rm -rf dist && rollup -c",
     "watch": "rollup -c -w",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/frontend_notifications.cjs"
   },
   "repository": {
     "type": "git",

@@ -11,7 +11,8 @@ import {
 	Focusable,
 } from "decky-frontend-lib";
 
-import { callable } from "@decky/api";
+import { callable, toaster } from "@decky/api";
+import type { ToastNotification } from "@decky/api";
 
 import React, {
 	VFC,
@@ -77,52 +78,84 @@ class DecktationLogic {
 	inputError: string = "";
 	onButtonChange: (() => void) | null = null;
 	l5Held: boolean = false;
-	showNotifications: boolean = true;
+	private notificationsEnabled = true;
+	private notificationsDisposed = false;
+	private notificationHandles = new Map<"status" | "pending", ToastNotification>();
+	private testRecordingInProgress = false;
+
+	get showNotifications(): boolean { return this.notificationsEnabled; }
+	set showNotifications(enabled: boolean) {
+		this.notificationsEnabled = enabled;
+		if (!enabled) this.dismissNotifications();
+	}
 	prevRecordingStartCount: number = 0;
 	prevPendingText: string = "";
 
-	notify = (message: string, duration: number = 2000, body: string = ""): void => {
-		if (!this.showNotifications) return;
-		const store = (window as any).NotificationStore;
-		if (!store?.ProcessNotification) return;
-		if (!body) {
-			body = message;
-		}
-		const toast: any = {
-			title: message,
-			body: body,
-			duration: duration,
-			critical: false,
-		};
-		const id: number = store.m_nNextTestNotificationID++;
-		const toastData: any = {
-			nNotificationID: id,
-			bNewIndicator: false,
-			rtCreated: Date.now(),
-			eType: 43,
-			eSource: 1,
-			nToastDurationMS: duration,
-			data: toast,
-			decky: true,
-		};
-		const info: any = {
-			showToast: true,
-			sound: 6,
-			playSound: false,
-			eFeature: 0,
-			toastDurationMS: duration,
-			bCritical: false,
-			// Status popups must not enter Steam notification history: its renderer
-			// expects data.item.notification_type, which these Decky toasts lack.
-			fnTray: null,
-		};
+	dismissNotification = (slot: "status" | "pending") => {
+		const handle = this.notificationHandles.get(slot);
+		this.notificationHandles.delete(slot);
 		try {
-			store.ProcessNotification(info, toastData, 0);
+			handle?.dismiss();
 		} catch (error) {
-			// The standard Decky toaster also inserts a tray entry; do not fall back
-			// to it. Notification failure must not interrupt recording.
-			console.warn("[Decktation] Could not display status popup:", error);
+			console.warn("[Decktation] Could not dismiss notification:", error);
 		}
+	}
+
+	dismissNotifications = () => {
+		this.dismissNotification("status");
+		this.dismissNotification("pending");
+	}
+
+	disposeNotifications = () => {
+		this.notificationsDisposed = true;
+		this.dismissNotifications();
+	}
+
+	notify = (message: string, duration: number = 2000, body: string = "", slot: "status" | "pending" = "status"): void => {
+		if (!this.showNotifications || this.notificationsDisposed) return;
+		this.dismissNotification(slot);
+		try {
+			const handle = toaster.toast({
+				title: message,
+				body: body || message,
+				duration,
+				// Dictation alerts are transient, including their history entries.
+				expiration: duration,
+				playSound: false,
+				showNewIndicator: false,
+				critical: false,
+			});
+			// Another plugin may replace the shared toaster and violate its contract.
+			// Keep dictation working even if no usable notification handle is returned.
+			if (typeof handle?.dismiss === "function") {
+				this.notificationHandles.set(slot, handle);
+			} else {
+				console.warn("[Decktation] Toaster returned no dismiss handle");
+			}
+		} catch (error) {
+			console.warn("[Decktation] Could not display notification:", error);
+		}
+	}
+
+	updateNotificationStatus = (result: RpcResponse) => {
+		const startCount: number = result.recording_start_count || 0;
+		if (startCount > this.prevRecordingStartCount && !this.testRecordingInProgress) {
+			this.dismissNotification("pending");
+			this.notify("Decktation", 1500, "🎤 Recording...");
+		}
+		this.prevRecordingStartCount = startCount;
+
+		const pendingText: string = result.pending_text || "";
+		const pendingDelay: number = result.pending_delay || 0;
+		if (pendingText && pendingText !== this.prevPendingText && !this.testRecordingInProgress) {
+			const secs = Math.round(pendingDelay);
+			this.dismissNotification("status");
+			this.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`, "pending");
+		} else if (!pendingText && this.prevPendingText) {
+			this.dismissNotification("pending");
+		}
+		// Always consume transitions, including while alerts are disabled.
+		this.prevPendingText = pendingText;
 	}
 
 	// Handler for RegisterForControllerStateChanges (antiquitte style)
@@ -188,27 +221,38 @@ class DecktationLogic {
 	}
 
 	testRecording = async (onComplete?: (text: string, time: string) => void) => {
-		this.notify("Decktation", 1000, "Recording for 3 seconds...");
-		await startRecording();
+		if (this.testRecordingInProgress) return;
+		this.testRecordingInProgress = true;
+		try {
+			this.notify("Decktation", 1000, "Recording for 3 seconds...");
+			await startRecording();
 
-		// Wait 3 seconds
-		await new Promise(resolve => setTimeout(resolve, 3000));
+			// Wait 3 seconds
+			await new Promise(resolve => setTimeout(resolve, 3000));
 
-		// Test recordings display their result in the panel but must never type
-		// into the active application. Change the UI state at exactly 3 seconds,
-		// then wait only for transcription to finish.
-		const transcription = stopRecording(false);
-		this.notify("Decktation", 1500, "Transcribing...");
-		await transcription;
+			// Test recordings display their result in the panel but must never type
+			// into the active application. Change the UI state at exactly 3 seconds,
+			// then wait only for transcription to finish.
+			const transcription = stopRecording(false);
+			this.notify("Decktation", 1500, "Transcribing...");
+			await transcription;
 
-		if (onComplete) {
-			const transcriptionResult = await getLastTranscription();
-			if (transcriptionResult.success && transcriptionResult.transcription) {
-				const data = transcriptionResult.transcription;
-				const text = data.text || "";
-				const time = data.timestamp ? new Date(data.timestamp * 1000).toLocaleTimeString() : "";
-				onComplete(text, time);
+			if (onComplete) {
+				const transcriptionResult = await getLastTranscription();
+				if (transcriptionResult.success && transcriptionResult.transcription) {
+					const data = transcriptionResult.transcription;
+					const text = data.text || "";
+					const time = data.timestamp ? new Date(data.timestamp * 1000).toLocaleTimeString() : "";
+					onComplete(text, time);
+				}
 			}
+		} finally {
+			// Catch up the counter before releasing the guard if polling missed it.
+			try {
+				const status = await getStatus();
+				if (status.success) this.updateNotificationStatus(status);
+			} catch (_) { }
+			this.testRecordingInProgress = false;
 		}
 	}
 }
@@ -903,23 +947,7 @@ export default definePlugin(() => {
 		try {
 			const result = await getStatus();
 			if (result.success) {
-				const startCount: number = result.recording_start_count || 0;
-				if (startCount > logic.prevRecordingStartCount) {
-					logic.notify("Recording", 1500, "🎤 Recording...");
-				}
-				logic.prevRecordingStartCount = startCount;
-
-				const pendingText: string = result.pending_text || "";
-				const pendingDelay: number = result.pending_delay || 0;
-				if (pendingText && !logic.prevPendingText) {
-					const secs = Math.round(pendingDelay);
-					// Popup-only alerts expire naturally. Reprocessing a notification
-					// with a 1ms duration creates another popup, rather than dismissing it.
-					logic.notify(`Sending in ${secs}s`, (pendingDelay + 0.5) * 1000, `"${pendingText}" — hold PTT to cancel`);
-				}
-				// Track transitions even while alerts are disabled so enabling them
-				// does not replay a recording or countdown that already started.
-				logic.prevPendingText = pendingText;
+				logic.updateNotificationStatus(result);
 			}
 		} catch (_e) {
 		} finally {
@@ -932,6 +960,7 @@ export default definePlugin(() => {
 		content: <DecktationPanel logic={logic} />,
 		icon: <FaMicrophone />,
 		onDismount() {
+			logic.disposeNotifications();
 			clearInterval(bgNotifyInterval);
 			if (input_register) {
 				input_register.unregister();
